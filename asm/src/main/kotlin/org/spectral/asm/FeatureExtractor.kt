@@ -76,7 +76,7 @@ class FeatureExtractor(private val group: ClassGroup) {
                 /*
                  * When instruction is a method invocation.
                  */
-                is MethodInsnNode -> processMethodInvocation(method, insn.owner, insn.name, insn.desc, insn.itf)
+                is MethodInsnNode -> processMethodInvocation(method, insn.owner, insn.name, insn.desc, insn.itf, (insn.opcode == INVOKESTATIC))
 
                 /*
                  * When instruction is a field invocation.
@@ -123,7 +123,7 @@ class FeatureExtractor(private val group: ClassGroup) {
 
                     when(handle.tag) {
                         H_INVOKEVIRTUAL, H_INVOKESTATIC, H_INVOKESPECIAL, H_NEWINVOKESPECIAL, H_INVOKEINTERFACE -> {
-                            processMethodInvocation(method, handle.owner, handle.name, handle.desc, handle.isInterface)
+                            processMethodInvocation(method, handle.owner, handle.name, handle.desc, handle.isInterface, (handle.tag == H_INVOKESTATIC))
                             return
                         }
                     }
@@ -142,14 +142,9 @@ class FeatureExtractor(private val group: ClassGroup) {
      * @param desc String
      * @param toInterface Boolean
      */
-    private fun processMethodInvocation(method: Method, ownerName: String, name: String, desc: String, toInterface: Boolean) {
+    private fun processMethodInvocation(method: Method, ownerName: String, name: String, desc: String, toInterface: Boolean, isStatic: Boolean) {
         val owner = group.getOrCreate(ownerName)
-
-        /*
-         * In the future, we should add virtual method support.
-         * This should increase the method match rates.
-         */
-        val dst = owner.resolveMethod(name, desc, toInterface) ?: return
+        val dst = owner.resolveMethod(name, desc, toInterface) ?: owner.addMethod(name, desc, isStatic)
 
         dst.refsIn.add(method)
         method.refsOut.add(dst)

@@ -1,37 +1,87 @@
 package org.spectral.asm
 
+import org.objectweb.asm.Opcodes.ACC_STATIC
+import org.objectweb.asm.Opcodes.ASM8
 import org.objectweb.asm.Type
+import org.objectweb.asm.tree.InsnList
 import org.objectweb.asm.tree.MethodNode
 import org.spectral.asm.util.newIdentityHashSet
 import java.lang.reflect.Modifier
 
-class Method(val group: ClassGroup, val owner: Class, val node: MethodNode) : Matchable<Method>() {
+/**
+ * Represents a java method from bytecode that belongs within
+ * a [Class] object.
+ *
+ * @property group ClassGroup
+ * @property owner Class
+ * @property node MethodNode
+ * @property real Boolean
+ * @constructor
+ */
+class Method private constructor(val group: ClassGroup, val owner: Class, val node: MethodNode, val real: Boolean) : Matchable<Method>() {
 
-    override val name = node.name
+    /**
+     * Initializes the ASM fields after the constructor.
+     */
+    private fun init() {
+        name = node.name
+        desc = node.desc
+        access = node.access
+        type = Type.getMethodType(desc)
+        returnTypeClass = group.getOrCreate(type.returnType.className)
+        argTypeClasses = type.argumentTypes.map { group.getOrCreate(it.className) }
+        instructions = node.instructions
+    }
 
-    val desc = node.desc
+    /**
+     * Creates a 'real' known method object.
+     *
+     * @param group ClassGroup
+     * @param owner Class
+     * @param node MethodNode
+     * @constructor
+     */
+    constructor(group: ClassGroup, owner: Class, node: MethodNode) : this(group, owner, node, true) {
+        this.init()
+    }
 
-    val access = node.access
+    /**
+     * Creates a 'fake' unknown or virtual method object.
+     *
+     * @param group ClassGroup
+     * @param owner Class
+     * @param name String
+     * @constructor
+     */
+    constructor(group: ClassGroup, owner: Class, name: String, desc: String, static: Boolean) : this(group, owner, MethodNode(ASM8), false) {
+        this.node.name = name
+        this.node.desc = desc
+        this.node.access = if(static) this.node.access and ACC_STATIC else this.node.access
+        this.match = this
+        this.init()
+    }
 
-    val type = Type.getMethodType(desc)
+    override lateinit var name: String
 
-    val returnType = type.returnType
+    lateinit var desc: String
 
-    val returnTypeClass = group.getOrCreate(returnType.className)
+    var access: Int = 0
 
-    val argTypes = type.argumentTypes
+    lateinit var type: Type
 
-    val argTypeClasses = argTypes.map { group.getOrCreate(it.className) }
+    lateinit var returnTypeClass: Class
 
-    val instructions = node.instructions
+    lateinit var argTypeClasses: List<Class>
 
-    val isStatic: Boolean = Modifier.isStatic(access)
+    lateinit var instructions: InsnList
 
-    val isPrivate: Boolean = Modifier.isPrivate(access)
+    val isStatic: Boolean get() = Modifier.isStatic(access)
 
-    val isConstructor: Boolean = name == "<init>"
+    val isPrivate: Boolean get() = Modifier.isPrivate(access)
 
-    val isInitializer: Boolean = name == "<clinit>"
+    val isConstructor: Boolean get() = name == "<init>"
+
+    val isInitializer: Boolean get() = name == "<clinit>"
 
     val refsIn = newIdentityHashSet<Method>()
 

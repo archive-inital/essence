@@ -3,6 +3,7 @@ package org.spectral.asm
 import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.MethodNode
 import org.spectral.asm.util.newIdentityHashSet
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
@@ -99,6 +100,20 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
     fun getField(name: String, desc: String): Field? {
         if(!fields.containsKey(name+desc)) return null
         return fields[name + desc]!!
+    }
+
+    /**
+     * Adds a fake virtual method to the method group.
+     *
+     * @param name String
+     * @param desc String
+     * @param static Boolean
+     * @return Method
+     */
+    fun addMethod(name: String, desc: String, static: Boolean): Method {
+        val m = Method(group, this, name, desc, static)
+        group.env?.share(m) ?: methods.put(name+desc, m)
+        return m
     }
 
     /**

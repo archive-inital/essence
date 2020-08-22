@@ -34,6 +34,17 @@ class ClassEnvironment private constructor() {
         groupB.add(element)
     }
 
+    /**
+     * Adds a [Method] object to both class groups as a shared
+     * method.
+     *
+     * @param element Method
+     */
+    fun share(element: Method) {
+        groupA[element.owner.name]!!.methods[element.name+element.desc] = element
+        groupB[element.owner.name]!!.methods[element.name+element.desc] = element
+    }
+
     companion object {
 
         /**
