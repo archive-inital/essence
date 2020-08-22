@@ -4,9 +4,9 @@ import org.objectweb.asm.Type
 import org.objectweb.asm.tree.MethodNode
 import java.lang.reflect.Modifier
 
-class Method(val group: ClassGroup, val owner: Class, val node: MethodNode) {
+class Method(val group: ClassGroup, val owner: Class, val node: MethodNode) : Matchable<Method>() {
 
-    val name = node.name
+    override val name = node.name
 
     val desc = node.desc
 

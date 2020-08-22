@@ -16,6 +16,14 @@ class ClassEnvironment private constructor() {
     val groupB = ClassGroup(this)
 
     /**
+     * Initializes both class groups.
+     */
+    private fun init() {
+        groupA.init()
+        groupB.init()
+    }
+
+    /**
      * Adds an element to both classes as a shared
      * element.
      *
@@ -53,6 +61,8 @@ class ClassEnvironment private constructor() {
                 .map { Class(env.groupB, it) }
                 .apply { env.groupB.addAll(this) }
 
+
+            env.init()
 
             return env
         }

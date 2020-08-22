@@ -17,10 +17,20 @@ class ClassGroup(val env: ClassEnvironment? = null) {
      */
     private val classes = ConcurrentHashMap<String, Class>()
 
+    private val extractor = FeatureExtractor(this)
+
     /**
      * The number of classes in the group.
      */
     val size: Int get() = classes.size
+
+    /**
+     * Initializes the class group and extracts the
+     * features for the classes.
+     */
+    internal fun init() {
+        extractor.process()
+    }
 
     /**
      * Adds a [Class] object to the class group.

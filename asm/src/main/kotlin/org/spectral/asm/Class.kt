@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Represents a java class loaded from bytecode.
  */
-class Class private constructor(val group: ClassGroup, val node: ClassNode, val real: Boolean) {
+class Class private constructor(val group: ClassGroup, val node: ClassNode, val real: Boolean) : Matchable<Class>() {
 
     private fun init() {
         name = node.name
@@ -42,10 +42,11 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
     constructor(group: ClassGroup, name: String) : this(group, ClassNode(ASM8), false) {
         this.node.name = name
         this.node.superName = "java/lang/Object"
+        this.match = this
         this.init()
     }
 
-    lateinit var name: String
+    override lateinit var name: String
 
     lateinit var parentName: String
 

@@ -4,9 +4,9 @@ import org.objectweb.asm.Type
 import org.objectweb.asm.tree.FieldNode
 import java.lang.reflect.Modifier
 
-class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) {
+class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) : Matchable<Field>() {
 
-    val name = node.name
+    override val name = node.name
 
     val desc = node.desc
 
