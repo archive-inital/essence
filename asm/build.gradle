@@ -1,7 +1,5 @@
 description = 'Spectral ASM Framework'
 
-apply plugin: 'java'
-apply plugin: 'maven'
 apply plugin: 'maven-publish'
 
 def mavenUsername = hasProperty('mavenUsername') ? mavenUsername : System.getenv('MAVEN_USERNAME')

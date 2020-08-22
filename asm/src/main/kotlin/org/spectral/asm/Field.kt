@@ -2,6 +2,7 @@ package org.spectral.asm
 
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.FieldNode
+import org.spectral.asm.util.newIdentityHashSet
 import java.lang.reflect.Modifier
 
 class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) : Matchable<Field>() {
@@ -21,6 +22,12 @@ class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) : Matc
     val isStatic: Boolean = Modifier.isStatic(access)
 
     val isPrivate: Boolean = Modifier.isPrivate(access)
+
+    val readRefs = newIdentityHashSet<Method>()
+
+    val writeRefs = newIdentityHashSet<Method>()
+
+    val strings = newIdentityHashSet<String>()
 
     override fun toString(): String {
         return "$owner.$name"

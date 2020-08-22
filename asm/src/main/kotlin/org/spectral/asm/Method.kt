@@ -22,6 +22,8 @@ class Method(val group: ClassGroup, val owner: Class, val node: MethodNode) : Ma
 
     val argTypeClasses = argTypes.map { group.getOrCreate(it.className) }
 
+    val instructions = node.instructions
+
     val isStatic: Boolean = Modifier.isStatic(access)
 
     val isPrivate: Boolean = Modifier.isPrivate(access)

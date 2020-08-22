@@ -2,10 +2,10 @@ package org.spectral.asm.util
 
 import java.util.*
 
-fun <T> newIdentityHashSet(): Set<T> {
+fun <T> newIdentityHashSet(): MutableSet<T> {
     return Collections.newSetFromMap<T>(IdentityHashMap())
 }
 
-fun <T> newIdentityHashSet(entries: Collection<T>): Set<T> {
+fun <T> newIdentityHashSet(entries: Collection<T>): MutableSet<T> {
     return Collections.newSetFromMap<T>(IdentityHashMap()).apply { this.addAll(entries) }
 }
