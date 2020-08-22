@@ -2,6 +2,7 @@ package org.spectral.asm
 
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.MethodNode
+import org.spectral.asm.util.newIdentityHashSet
 import java.lang.reflect.Modifier
 
 class Method(val group: ClassGroup, val owner: Class, val node: MethodNode) : Matchable<Method>() {
@@ -31,6 +32,16 @@ class Method(val group: ClassGroup, val owner: Class, val node: MethodNode) : Ma
     val isConstructor: Boolean = name == "<init>"
 
     val isInitializer: Boolean = name == "<clinit>"
+
+    val refsIn = newIdentityHashSet<Method>()
+
+    val refsOut = newIdentityHashSet<Method>()
+
+    val fieldReadRefs = newIdentityHashSet<Field>()
+
+    val fieldWriteRefs = newIdentityHashSet<Field>()
+
+    val classRefs = newIdentityHashSet<Class>()
 
     override fun toString(): String {
         return "$owner.$name$desc"

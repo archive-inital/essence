@@ -1,9 +1,11 @@
 package org.spectral.asm
 
+import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.tree.FieldInsnNode
 import org.objectweb.asm.tree.InvokeDynamicInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
 import org.objectweb.asm.tree.TypeInsnNode
+import org.spectral.asm.util.targetHandle
 
 /**
  * Responsible for extracting features from classes.
@@ -74,29 +76,57 @@ class FeatureExtractor(private val group: ClassGroup) {
                 /*
                  * When instruction is a method invocation.
                  */
-                is MethodInsnNode -> {
-
-                }
+                is MethodInsnNode -> processMethodInvocation(method, insn.owner, insn.name, insn.desc, insn.itf)
 
                 /*
                  * When instruction is a field invocation.
                  */
                 is FieldInsnNode -> {
+                    val owner = group.getOrCreate(insn.owner)
 
+                    /*
+                     * In the future, we should add virtual fields.
+                     * This should increase the matching rate for member elements.
+                     */
+                    val dst = owner.resolveField(insn.name, insn.desc) ?: return
+
+                    /*
+                     * Determine if the field instructions is a read or write.
+                     */
+                    if(insn.opcode == GETSTATIC || insn.opcode == GETFIELD) {
+                        dst.readRefs.add(method)
+                        method.fieldReadRefs.add(dst)
+                    } else {
+                        dst.writeRefs.add(method)
+                        method.fieldWriteRefs.add(dst)
+                    }
+
+                    dst.owner.methodTypeRefs.add(method)
+                    method.classRefs.add(dst.owner)
                 }
 
                 /*
                  * When instruction is a type declaration
                  */
                 is TypeInsnNode -> {
+                    val dst = group.getOrCreate(insn.desc)
 
+                    dst.methodTypeRefs.add(method)
+                    method.classRefs.add(dst)
                 }
 
                 /*
                  * When instruction is a invoke dynamic invocation.
                  */
                 is InvokeDynamicInsnNode -> {
+                    val handle = insn.targetHandle ?: return
 
+                    when(handle.tag) {
+                        H_INVOKEVIRTUAL, H_INVOKESTATIC, H_INVOKESPECIAL, H_NEWINVOKESPECIAL, H_INVOKEINTERFACE -> {
+                            processMethodInvocation(method, handle.owner, handle.name, handle.desc, handle.isInterface)
+                            return
+                        }
+                    }
                 }
             }
         }
@@ -114,5 +144,16 @@ class FeatureExtractor(private val group: ClassGroup) {
      */
     private fun processMethodInvocation(method: Method, ownerName: String, name: String, desc: String, toInterface: Boolean) {
         val owner = group.getOrCreate(ownerName)
+
+        /*
+         * In the future, we should add virtual method support.
+         * This should increase the method match rates.
+         */
+        val dst = owner.resolveMethod(name, desc, toInterface) ?: return
+
+        dst.refsIn.add(method)
+        method.refsOut.add(dst)
+        dst.owner.methodTypeRefs.add(method)
+        method.classRefs.add(dst.owner)
     }
 }
