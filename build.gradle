@@ -1,0 +1,45 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.3.72' apply false
+}
+
+apply from: 'version.gradle'
+
+wrapper {
+    gradleVersion = "6.3"
+}
+
+allprojects {
+    apply plugin: 'org.jetbrains.kotlin.jvm'
+
+    group 'org.spectral'
+    version '0.0.1'
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        jcenter()
+        maven { url "http://repo.spectralclient.org/" }
+    }
+
+    dependencies {
+        implementation "org.jetbrains.kotlin:kotlin-stdlib"
+        implementation "org.tinylog:tinylog-api-kotlin:$tinylog"
+        implementation "org.tinylog:tinylog-impl:$tinylog"
+
+        testImplementation "org.junit.jupiter:junit-jupiter-api:$junit"
+        testImplementation "org.junit.jupiter:junit-jupiter-engine:$junit"
+        testImplementation "org.assertj:assertj-core:$assertj"
+        testImplementation "io.mockk:mockk:$mockk"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+
+    compileKotlin {
+        kotlinOptions.jvmTarget = "11"
+    }
+    compileTestKotlin {
+        kotlinOptions.jvmTarget = "11"
+    }
+}

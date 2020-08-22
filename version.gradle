@@ -1,0 +1,7 @@
+ext {
+    tinylog = "2.1.2"
+    asm = "8.0.1"
+    junit = "5.6.2"
+    assertj = "3.16.1"
+    mockk = "1.10.0"
+}

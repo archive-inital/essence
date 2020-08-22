@@ -1,0 +1,45 @@
+description = 'Spectral ASM Framework'
+
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
+
+def mavenUsername = hasProperty('mavenUsername') ? mavenUsername : System.getenv('MAVEN_USERNAME')
+def mavenPassword = hasProperty('mavenPassword') ? mavenPassword : System.getenv('MAVEN_PASSWORD')
+def mavenUrl = hasProperty('mavenUrl') ? mavenUrl : System.getenv('MAVEN_URL')
+
+dependencies {
+    implementation "org.ow2.asm:asm:$asm"
+    implementation "org.ow2.asm:asm-util:$asm"
+    implementation "org.ow2.asm:asm-commons:$asm"
+    implementation "org.ow2.asm:asm-tree:$asm"
+}
+
+task sourceJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'org.spectral'
+            artifactId = 'asm'
+            version = '0.0.1'
+
+            from components.java
+            artifact sourceJar
+        }
+    }
+
+    repositories {
+        maven {
+            credentials {
+                username = mavenUsername
+                password = mavenPassword
+            }
+
+            url = mavenUrl
+        }
+    }
+}
