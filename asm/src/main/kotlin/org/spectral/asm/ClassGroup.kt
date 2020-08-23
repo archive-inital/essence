@@ -28,7 +28,7 @@ class ClassGroup(val env: ClassEnvironment? = null) {
      * Initializes the class group and extracts the
      * features for the classes.
      */
-    internal fun init() {
+    fun init() {
         extractor.process()
     }
 
@@ -81,7 +81,7 @@ class ClassGroup(val env: ClassEnvironment? = null) {
      * is found, a 'fake' or virtual class is created.
      */
     fun getOrCreate(name: String): Class {
-        if(!classes.contains(name)) {
+        if(!classes.containsKey(name)) {
             val cls = Class(this, name)
             env?.share(cls) ?: add(cls)
             return cls
@@ -95,7 +95,7 @@ class ClassGroup(val env: ClassEnvironment? = null) {
      * specified name is found, the method returns false.
      */
     fun remove(name: String): Boolean {
-        if(!classes.contains(name)) {
+        if(!classes.containsKey(name)) {
             return false
         }
 

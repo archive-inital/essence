@@ -29,6 +29,8 @@ class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) : Matc
 
     val strings = newIdentityHashSet<String>()
 
+    val hierarchyMembers = newIdentityHashSet<Field>()
+
     override fun toString(): String {
         return "$owner.$name"
     }

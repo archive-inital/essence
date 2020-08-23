@@ -6,6 +6,9 @@ import org.objectweb.asm.tree.InvokeDynamicInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
 import org.objectweb.asm.tree.TypeInsnNode
 import org.spectral.asm.util.targetHandle
+import java.util.ArrayDeque
+import java.util.concurrent.ConcurrentHashMap
+import java.util.stream.Collectors
 
 /**
  * Responsible for extracting features from classes.
@@ -19,6 +22,7 @@ class FeatureExtractor(private val group: ClassGroup) {
      * Processes each class and extracts the features.
      */
     fun process() {
+        val obj = group.getOrCreate("java/lang/Object")
         /*
          * Processing pass A.
          */
@@ -32,6 +36,13 @@ class FeatureExtractor(private val group: ClassGroup) {
         group.forEach { c ->
             this.processB(c)
         }
+
+        /*
+         * Processing pass C.
+         */
+        group.forEach { c ->
+            this.processC(c)
+        }
     }
 
     /**
@@ -40,14 +51,20 @@ class FeatureExtractor(private val group: ClassGroup) {
      * @param cls Class
      */
     private fun processA(cls: Class) {
+        if(!cls.real) return
+
         /*
          * Build the hierarchy graph of the class.
          */
-        cls.parent = group.getOrCreate(cls.parentName)
-        cls.parent!!.children.add(cls)
+        if(cls.parent == null) {
+            cls.parent = group.getOrCreate(cls.parentName)
+            cls.parent!!.children.add(cls)
+        }
 
-        cls.interfaces.addAll(cls.interfaceNames.map { group.getOrCreate(it) })
-        cls.interfaces.forEach { it.implementers.add(cls) }
+        cls.interfaceNames.forEach { iname ->
+            val icls = group.getOrCreate(iname)
+            if(cls.interfaces.add(icls)) icls.implementers.add(cls)
+        }
     }
 
     /**
@@ -66,6 +83,8 @@ class FeatureExtractor(private val group: ClassGroup) {
      * @param method Method
      */
     private fun processMethodInsns(method: Method) {
+        if(!method.real) return
+
         val it = method.instructions.iterator()
 
         while(it.hasNext()) {
@@ -150,5 +169,58 @@ class FeatureExtractor(private val group: ClassGroup) {
         method.refsOut.add(dst)
         dst.owner.methodTypeRefs.add(method)
         method.classRefs.add(dst.owner)
+    }
+
+    /**
+     * Processing pass C.
+     *
+     * @param cls Class
+     */
+    private fun processC(cls: Class) {
+        if(cls.children.isNotEmpty() || cls.implementers.isNotEmpty()) return
+
+        val methods = ConcurrentHashMap<String, Method>()
+        val toCheck = ArrayDeque<Class>()
+        toCheck.add(cls)
+
+        var cur = toCheck.poll()
+        while(cur != null) {
+            for(method in cur.methods.values) {
+                val prev = methods[method.name+method.desc]
+                if(method.isHierarchyBarrier()) {
+                    if(method.hierarchyMembers.isEmpty()) {
+                        method.hierarchyMembers.add(method)
+                    }
+                } else if(prev != null) {
+                    if(method.hierarchyMembers.isEmpty()) {
+                        method.hierarchyMembers.clear()
+                        method.hierarchyMembers.addAll(prev.hierarchyMembers)
+                        method.hierarchyMembers.add(method)
+                    } else if(method.hierarchyMembers != prev.hierarchyMembers) {
+                        method.hierarchyMembers.addAll(prev.hierarchyMembers)
+
+                        prev.hierarchyMembers.stream().collect(Collectors.toList()).forEach { m ->
+                            m.hierarchyMembers.clear()
+                            m.hierarchyMembers.addAll(method.hierarchyMembers)
+                        }
+                    }
+                } else {
+                    methods[method.name+method.desc] = method
+
+                    if(method.hierarchyMembers.isEmpty()) {
+                        method.hierarchyMembers.add(method)
+                    }
+                }
+            }
+
+            if(cur.parent != null) toCheck.add(cur.parent!!)
+            toCheck.addAll(cur.interfaces)
+
+            cur = toCheck.poll()
+        }
+    }
+
+    private fun Method.isHierarchyBarrier(): Boolean {
+        return (this.access and (ACC_PRIVATE or ACC_STATIC)) != 0
     }
 }

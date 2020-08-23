@@ -93,6 +93,8 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
 
     val classRefs = newIdentityHashSet<Class>()
 
+    val hierarchyMembers = newIdentityHashSet<Method>()
+
     override fun toString(): String {
         return "$owner.$name$desc"
     }
