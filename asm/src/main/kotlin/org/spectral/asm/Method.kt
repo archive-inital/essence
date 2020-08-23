@@ -3,7 +3,9 @@ package org.spectral.asm
 import org.objectweb.asm.Opcodes.ACC_STATIC
 import org.objectweb.asm.Opcodes.ASM8
 import org.objectweb.asm.Type
+import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.InsnList
+import org.objectweb.asm.tree.LocalVariableNode
 import org.objectweb.asm.tree.MethodNode
 import org.spectral.asm.util.newIdentityHashSet
 import java.lang.reflect.Modifier
@@ -31,6 +33,8 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
         returnTypeClass = group.getOrCreate(type.returnType.className)
         argTypeClasses = type.argumentTypes.map { group.getOrCreate(it.className) }
         instructions = node.instructions
+        arguments = extractArguments()
+        variables = extractVariables()
     }
 
     /**
@@ -75,6 +79,10 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
 
     lateinit var instructions: InsnList
 
+    lateinit var arguments: List<Variable>
+
+    lateinit var variables: List<Variable>
+
     val isStatic: Boolean get() = Modifier.isStatic(access)
 
     val isPrivate: Boolean get() = Modifier.isPrivate(access)
@@ -94,6 +102,127 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
     val classRefs = newIdentityHashSet<Class>()
 
     val hierarchyMembers = newIdentityHashSet<Method>()
+
+    /**
+     * Extracts the method arguments from the current method's instruction list.
+     *
+     * @return List<Variable>
+     */
+    private fun extractArguments(): List<Variable> {
+        if(!real) return mutableListOf()
+
+        val args = mutableListOf<Variable>()
+        val locals = node.localVariables
+        val insns = instructions
+        val firstInsn = instructions.first()
+
+        var lvIndex = if(isStatic) 0 else 1
+
+        for(i in argTypeClasses.indices) {
+            val typeClass = argTypeClasses[i]
+            var index = -1
+            var startInsn = -1
+            var endInsn = -1
+            var name: String? = null
+
+            if(locals != null) {
+                for(j in locals.indices) {
+                    val lv = locals[j]
+
+                    if(lv.index == lvIndex && lv.start == firstInsn) {
+                        index = j
+                        startInsn = insns.indexOf(lv.start)
+                        endInsn = insns.indexOf(lv.end)
+                        name = lv.name
+
+                        break
+                    }
+                }
+            }
+
+            val arg = Variable(group, this, true, i, lvIndex, index, typeClass, startInsn, endInsn, 0, name ?: "arg${index}")
+            args[i] = arg
+
+            classRefs.add(typeClass)
+            typeClass.methodTypeRefs.add(this)
+
+            /*
+             * Increase the lvIndex given a slot data size.
+             */
+            val type = type.argumentTypes[i]
+            lvIndex += if(type == Type.DOUBLE_TYPE || type == Type.LONG_TYPE) {
+                2
+            } else {
+                1
+            }
+        }
+
+        return args
+    }
+
+    /**
+     * Extracts the local variables of the method from the given
+     * method instruction list.
+     *
+     * @return List<Variable>
+     */
+    private fun extractVariables(): List<Variable> {
+        if(!real) return emptyList()
+        if(node.localVariables == null || node.localVariables.isEmpty()) return emptyList()
+
+        val insns = instructions
+        val firstInsn = insns.first()
+        val localVariables = mutableListOf<LocalVariableNode>()
+
+        lvLoop@ for(i in node.localVariables.indices) {
+            val lv = node.localVariables[i]
+
+            if(lv.start == firstInsn) {
+                /*
+                 * Check if its actually an argument and not a local variable.
+                 */
+                if(lv.index == 0 && !isStatic) continue
+
+                for(arg in arguments) {
+                    if(arg.asmIndex == i) {
+                        continue@lvLoop
+                    }
+                }
+            }
+
+            localVariables.add(lv)
+        }
+
+        if(localVariables.isEmpty()) return emptyList()
+
+        /*
+         * Sort the local variable list by start BCI instruction indexes.
+         */
+        localVariables.sortWith(compareBy { insns.indexOf(it.start) })
+
+        val ret = mutableListOf<Variable>()
+
+        for(i in localVariables.indices) {
+            val localVar = localVariables[i]
+
+            val startInsn = insns.indexOf(localVar.start)
+            val endInsn = insns.indexOf(localVar.end)
+
+            var start: AbstractInsnNode? = localVar.start
+            var startOpIndex = 0
+
+            start = start?.previous
+            while(start != null) {
+                if(start.opcode >= 0) startOpIndex++
+                start = start.previous
+            }
+
+            ret.add(Variable(group, this, false, i, localVar.index, node.localVariables.indexOf(localVar),
+            group.getOrCreate(localVar.desc), startInsn, endInsn, startOpIndex, localVar.name))
+        }
+
+        return ret
+    }
 
     override fun toString(): String {
         return "$owner.$name$desc"
