@@ -1,9 +1,6 @@
 package org.spectral.mapper.util
 
-import org.spectral.asm.Class
-import org.spectral.asm.Field
-import org.spectral.asm.Matchable
-import org.spectral.asm.Method
+import org.spectral.asm.*
 import org.spectral.asm.util.newIdentityHashSet
 import kotlin.math.abs
 import kotlin.math.max
@@ -51,6 +48,16 @@ object CompareUtil {
         if(!isObfuscatedName(a.name) && !isObfuscatedName(b.name)) {
             return a.name == b.name
         }
+
+        return true
+    }
+
+    fun isPotentiallyEqual(a: Variable, b: Variable): Boolean {
+        if(a == b) return true
+        if(a.match != null) return a.match == b
+        if(b.match != null) return b.match == a
+        if(a.isArg != b.isArg) return false
+        if(!isPotentiallyEqual(a.owner, b.owner)) return false
 
         return true
     }

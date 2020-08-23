@@ -4,6 +4,8 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.validate
 import com.github.ajalt.clikt.parameters.types.file
+import org.spectral.asm.ClassEnvironment
+import org.tinylog.kotlin.Logger
 
 /**
  * The Mapper CLI console command used to start and set
@@ -35,6 +37,19 @@ class MapperCommand : CliktCommand(
      * Run the command logic.
      */
     override fun run() {
+        Logger.info("Building class environment.")
 
+        /*
+         * Create the class environment from both JAR files.
+         */
+        val env = ClassEnvironment.init(jarFileA, jarFileB)
+
+        Logger.info("Preparing to run mapper.")
+
+        /*
+         * Create mapper instance.
+         */
+        val mapper = Mapper(env)
+        mapper.run()
     }
 }

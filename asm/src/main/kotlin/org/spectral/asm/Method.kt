@@ -109,7 +109,7 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
      * @return List<Variable>
      */
     private fun extractArguments(): List<Variable> {
-        if(!real) return mutableListOf()
+        if(!real || type.argumentTypes.isEmpty() || instructions.size() == 0) return emptyList()
 
         val args = mutableListOf<Variable>()
         val locals = node.localVariables
@@ -140,8 +140,8 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
                 }
             }
 
-            val arg = Variable(group, this, true, i, lvIndex, index, typeClass, startInsn, endInsn, 0, name ?: "arg${index}")
-            args[i] = arg
+            val arg = Variable(group, this, true, i, lvIndex, index, typeClass, startInsn, endInsn, 0, name ?: "arg${i + 1}")
+            args.add(arg)
 
             classRefs.add(typeClass)
             typeClass.methodTypeRefs.add(this)
