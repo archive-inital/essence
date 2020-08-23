@@ -23,7 +23,7 @@ publishing {
         maven(MavenPublication) {
             groupId = 'org.spectral'
             artifactId = 'asm'
-            version = '0.0.1'
+            version = version
 
             from components.java
             artifact sourceJar
