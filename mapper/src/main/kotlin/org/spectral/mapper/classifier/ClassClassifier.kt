@@ -2,6 +2,7 @@ package org.spectral.mapper.classifier
 
 import org.objectweb.asm.Opcodes.*
 import org.spectral.asm.Class
+import org.spectral.asm.Field
 import org.spectral.asm.Method
 import org.spectral.asm.util.newIdentityHashSet
 import org.spectral.mapper.util.CompareUtil
@@ -31,6 +32,8 @@ object ClassClassifier : Classifier<Class>() {
         register(inReferences, 6)
         register(methodOutReferences, 6, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
         register(methodInReferences, 6, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
+        register(fieldReadReferences, 5, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
+        register(fieldWriteReferences, 5, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
     }
 
     /////////////////////////////////////////////
@@ -173,6 +176,20 @@ object ClassClassifier : Classifier<Class>() {
         return@classifier CompareUtil.compareMethodSets(refsA, refsB)
     }
 
+    private val fieldReadReferences = classifier("field read references") { a, b ->
+        val refsA = a.getFieldReadReferences()
+        val refsB = b.getFieldReadReferences()
+
+        return@classifier CompareUtil.compareFieldSets(refsA, refsB)
+    }
+
+    private val fieldWriteReferences = classifier("field write references") { a, b ->
+        val refsA = a.getFieldWriteReferences()
+        val refsB = b.getFieldWriteReferences()
+
+        return@classifier CompareUtil.compareFieldSets(refsA, refsB)
+    }
+
     /////////////////////////////////////////////
     // HELPER METHODS
     /////////////////////////////////////////////
@@ -214,6 +231,22 @@ object ClassClassifier : Classifier<Class>() {
         val ret = newIdentityHashSet<Method>()
 
         this.methods.values.forEach { ret.addAll(it.refsIn) }
+
+        return ret
+    }
+
+    private fun Class.getFieldReadReferences(): Set<Field> {
+        val ret = newIdentityHashSet<Field>()
+
+        this.methods.values.forEach { ret.addAll(it.fieldReadRefs) }
+
+        return ret
+    }
+
+    private fun Class.getFieldWriteReferences(): Set<Field> {
+        val ret = newIdentityHashSet<Field>()
+
+        this.methods.values.forEach { ret.addAll(it.fieldWriteRefs) }
 
         return ret
     }
