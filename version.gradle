@@ -4,4 +4,7 @@ ext {
     junit = "5.6.2"
     assertj = "3.16.1"
     mockk = "1.10.0"
+    spek = "2.0.12"
+    clikt = "2.8.0"
+    jimfs = "1.1"
 }

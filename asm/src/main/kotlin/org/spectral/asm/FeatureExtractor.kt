@@ -22,7 +22,7 @@ class FeatureExtractor(private val group: ClassGroup) {
      * Processes each class and extracts the features.
      */
     fun process() {
-        val obj = group.getOrCreate("java/lang/Object")
+        group.getOrCreate("java/lang/Object")
         /*
          * Processing pass A.
          */

@@ -26,14 +26,17 @@ allprojects {
         implementation "org.tinylog:tinylog-api-kotlin:$tinylog"
         implementation "org.tinylog:tinylog-impl:$tinylog"
 
-        testImplementation "org.junit.jupiter:junit-jupiter-api:$junit"
-        testImplementation "org.junit.jupiter:junit-jupiter-engine:$junit"
+        testRuntimeOnly "org.jetbrains.kotlin:kotlin-reflect"
         testImplementation "org.assertj:assertj-core:$assertj"
         testImplementation "io.mockk:mockk:$mockk"
+        testImplementation "org.spekframework.spek2:spek-dsl-jvm:$spek"
+        testRuntimeOnly "org.spekframework.spek2:spek-runner-junit5:$spek"
     }
 
     test {
-        useJUnitPlatform()
+        useJUnitPlatform {
+            includeEngines 'spek2'
+        }
     }
 
     compileKotlin {
