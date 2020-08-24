@@ -41,8 +41,6 @@ class ClassEnvironment private constructor() {
      * @param element Method
      */
     fun share(element: Method) {
-        groupA[element.owner.name]!!.methods[element.name+element.desc] = element
-        groupB[element.owner.name]!!.methods[element.name+element.desc] = element
     }
 
     companion object {

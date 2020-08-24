@@ -14,8 +14,6 @@ import kotlin.math.sqrt
  */
 class Mapper(val env: ClassEnvironment) {
 
-
-
     /**
      * Initialize the classifiers.
      */
@@ -62,6 +60,7 @@ class Mapper(val env: ClassEnvironment) {
 
         do {
             matchedAny = matchStaticMethods(level)
+            matchedAny = matchedAny or matchMethods(level)
 
             if(!matchedAny && !matchedClassesBefore) {
                 break
@@ -129,6 +128,31 @@ class Mapper(val env: ClassEnvironment) {
         }
 
         Logger.info("Matched ${matches.size} static methods (${totalUnmatched.get()} unmatched)")
+
+        return matches.isNotEmpty()
+    }
+
+    /**
+     * Matches normal member methods.
+     *
+     * @param level ClassifierLevel
+     * @return Boolean
+     */
+    fun matchMethods(level: ClassifierLevel): Boolean {
+        val totalUnmatched = AtomicInteger()
+        val matches = getMatches(
+            level,
+            { it.methods.values.filter { it.real && !it.isStatic } },
+            MethodClassifier,
+            MethodClassifier.getMaxScore(level),
+            totalUnmatched
+        )
+
+        matches.forEach { (key, value) ->
+            match(key, value)
+        }
+
+        Logger.info("Matched ${matches.size} methods (${totalUnmatched.get()} unmatched)")
 
         return matches.isNotEmpty()
     }
@@ -360,6 +384,8 @@ class Mapper(val env: ClassEnvironment) {
     private fun printMatchStatistics() {
         val classCount = env.groupA.filter { it.real && it.hasMatch() }.size
         val classTotal = env.groupA.filter { it.real }.size
+        val staticMethodCount = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real && it.isStatic && it.hasMatch() } }.size
+        val staticMethodTotal = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real && it.isStatic } }.size
         val methodCount = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real && it.hasMatch() } }.size
         val methodTotal = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real } }.size
         val fieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.hasMatch() } }.size
@@ -367,6 +393,7 @@ class Mapper(val env: ClassEnvironment) {
 
         println("===========================================")
         println("Classes: $classCount / $classTotal (${(classCount.toDouble() / classTotal.toDouble()) * 100.0}%)")
+        println("Static Methods: $staticMethodCount / $staticMethodTotal (${(staticMethodCount.toDouble() / staticMethodTotal.toDouble()) * 100.0}%)")
         println("Methods: $methodCount / $methodTotal (${(methodCount.toDouble() / methodTotal.toDouble()) * 100.0}%)")
         println("Fields: $fieldCount / $fieldTotal (${(fieldCount.toDouble() / fieldTotal.toDouble()) * 100.0}%)")
         println("===========================================")

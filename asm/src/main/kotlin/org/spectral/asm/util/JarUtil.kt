@@ -21,13 +21,15 @@ object JarUtil {
         val nodes = mutableListOf<ClassNode>()
 
         JarFile(file).use { jar ->
-            jar.entries().asSequence().forEach {
-                val node = ClassNode()
-                val reader = ClassReader(jar.getInputStream(it))
-                reader.accept(node, ClassReader.SKIP_FRAMES)
+            jar.entries().asSequence()
+                .filter { it.name.endsWith(".class") }
+                .forEach {
+                    val node = ClassNode()
+                    val reader = ClassReader(jar.getInputStream(it))
+                    reader.accept(node, ClassReader.SKIP_FRAMES)
 
-                nodes.add(node)
-            }
+                    nodes.add(node)
+                }
         }
 
         return nodes

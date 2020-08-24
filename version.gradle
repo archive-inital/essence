@@ -7,4 +7,5 @@ ext {
     spek = "2.0.12"
     clikt = "2.8.0"
     jimfs = "1.1"
+    guava = "29.0-jre"
 }
