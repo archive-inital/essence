@@ -24,7 +24,7 @@ object JarUtil {
             jar.entries().asSequence().forEach {
                 val node = ClassNode()
                 val reader = ClassReader(jar.getInputStream(it))
-                reader.accept(node, ClassReader.EXPAND_FRAMES)
+                reader.accept(node, ClassReader.SKIP_FRAMES)
 
                 nodes.add(node)
             }

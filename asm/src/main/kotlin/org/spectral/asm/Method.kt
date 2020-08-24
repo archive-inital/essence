@@ -30,11 +30,7 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
         desc = node.desc
         access = node.access
         type = Type.getMethodType(desc)
-        returnTypeClass = group.getOrCreate(type.returnType.className)
-        argTypeClasses = type.argumentTypes.map { group.getOrCreate(it.className) }
         instructions = node.instructions
-        arguments = extractArguments()
-        variables = extractVariables()
     }
 
     /**
@@ -108,7 +104,7 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
      *
      * @return List<Variable>
      */
-    private fun extractArguments(): List<Variable> {
+    internal fun extractArguments(): List<Variable> {
         if(!real || type.argumentTypes.isEmpty() || instructions.size() == 0) return emptyList()
 
         val args = mutableListOf<Variable>()
@@ -166,7 +162,7 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
      *
      * @return List<Variable>
      */
-    private fun extractVariables(): List<Variable> {
+    internal fun extractVariables(): List<Variable> {
         if(!real) return emptyList()
         if(node.localVariables == null || node.localVariables.isEmpty()) return emptyList()
 
@@ -222,6 +218,22 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
         }
 
         return ret
+    }
+
+    /**
+     * Gets the first resolved hierarchy member from matched
+     * elements.
+     */
+    val matchedHierarchyMember: Method? get() {
+        if(hasMatch()) return this
+
+        hierarchyMembers.forEach { m ->
+            if(m.hasMatch()) {
+                if(!m.owner.real && !this.owner.real) return m
+            }
+        }
+
+        return null
     }
 
     override fun toString(): String {

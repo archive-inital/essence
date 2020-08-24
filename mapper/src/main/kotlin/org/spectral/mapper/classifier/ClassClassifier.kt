@@ -6,6 +6,7 @@ import org.spectral.asm.Field
 import org.spectral.asm.Method
 import org.spectral.asm.util.newIdentityHashSet
 import org.spectral.mapper.util.CompareUtil
+import org.spectral.mapper.util.RankUtil
 import kotlin.math.max
 import kotlin.math.pow
 
@@ -34,6 +35,20 @@ object ClassClassifier : Classifier<Class>() {
         register(methodInReferences, 6, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
         register(fieldReadReferences, 5, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
         register(fieldWriteReferences, 5, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
+    }
+
+    /**
+     * Recursively ranks a [src] class to all of the [dsts] classes and returns a sorted
+     * list of results.
+     *
+     * @param src Class
+     * @param dsts List<Class>
+     * @param level ClassifierLevel
+     * @param maxMismatch Double
+     * @return List<RankResult<Class>>
+     */
+    override fun rank(src: Class, dsts: List<Class>, level: ClassifierLevel, maxMismatch: Double): List<RankResult<Class>> {
+        return RankUtil.rank(src, dsts, getClassifiers(level), CompareUtil::isPotentiallyEqual, maxMismatch)
     }
 
     /////////////////////////////////////////////

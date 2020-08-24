@@ -17,7 +17,7 @@ class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) : Matc
 
     val type = Type.getType(desc)
 
-    val typeClass = group.getOrCreate(type.className)
+    lateinit var typeClass: Class
 
     val isStatic: Boolean = Modifier.isStatic(access)
 

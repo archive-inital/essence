@@ -56,6 +56,16 @@ abstract class Classifier<T> {
     }
 
     /**
+     * Gets all the classifier checks for a given [ClassifierLevel]
+     *
+     * @param level ClassifierLevel
+     * @return List<ClassifierCheck<T>>
+     */
+    fun getClassifiers(level: ClassifierLevel): List<ClassifierCheck<T>> {
+        return classifierChecks.getOrDefault(level, Collections.emptyList())
+    }
+
+    /**
      * An internal inline classifier builder method.
      *
      * @param name String
@@ -72,4 +82,6 @@ abstract class Classifier<T> {
             }
         }
     }
+
+    abstract fun rank(src: T, dsts: List<T>, level: ClassifierLevel, maxMismatch: Double): List<RankResult<T>>
 }

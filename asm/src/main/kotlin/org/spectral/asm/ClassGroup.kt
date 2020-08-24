@@ -24,6 +24,8 @@ class ClassGroup(val env: ClassEnvironment? = null) {
      */
     val size: Int get() = classes.size
 
+    val realClassesCount: Int get() = classes.values.filter { it.real }.size
+
     /**
      * Initializes the class group and extracts the
      * features for the classes.
@@ -107,5 +109,9 @@ class ClassGroup(val env: ClassEnvironment? = null) {
      */
     fun firstOrNull(predicate: (Class) -> Boolean): Class? {
         return classes.values.firstOrNull { predicate(it) }
+    }
+
+    fun filter(predicate: (Class) -> Boolean): List<Class> {
+        return classes.values.filter { predicate(it) }
     }
 }

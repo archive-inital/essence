@@ -63,14 +63,14 @@ class ClassEnvironment private constructor() {
              */
             JarUtil.loadJar(jarFileA)
                 .map { Class(env.groupA, it) }
-                .apply { env.groupA.addAll(this) }
+                .forEach { env.groupA.add(it) }
 
             /*
              * Load classes from jar file B.
              */
             JarUtil.loadJar(jarFileB)
                 .map { Class(env.groupB, it) }
-                .apply { env.groupB.addAll(this) }
+                .forEach { env.groupB.add(it) }
 
 
             env.init()

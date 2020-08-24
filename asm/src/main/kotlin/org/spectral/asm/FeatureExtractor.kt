@@ -65,6 +65,17 @@ class FeatureExtractor(private val group: ClassGroup) {
             val icls = group.getOrCreate(iname)
             if(cls.interfaces.add(icls)) icls.implementers.add(cls)
         }
+
+        cls.methods.values.forEach { m ->
+            m.returnTypeClass = m.group.getOrCreate(m.type.returnType.className)
+            m.argTypeClasses = m.type.argumentTypes.map { m.group.getOrCreate(it.className) }
+            m.arguments = m.extractArguments()
+            m.variables = m.extractVariables()
+        }
+
+        cls.fields.values.forEach { f ->
+            f.typeClass = f.group.getOrCreate(f.type.className)
+        }
     }
 
     /**
