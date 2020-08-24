@@ -73,6 +73,10 @@ class ClassGroup(val env: ClassEnvironment? = null) {
         classes.values.forEach { action(it) }
     }
 
+    fun <T> flatMap(transform: (Class) -> Iterable<T>): List<T> {
+        return classes.flatMap { transform(it.value) }
+    }
+
     /**
      * Gets a [Class] object by name if it exists in the group.
      */

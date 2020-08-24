@@ -1,17 +1,12 @@
 package org.spectral.mapper
 
-import org.spectral.asm.Class
-import org.spectral.asm.ClassEnvironment
-import org.spectral.asm.Field
-import org.spectral.asm.Method
+import org.spectral.asm.*
 import org.spectral.asm.util.newIdentityHashSet
-import org.spectral.mapper.classifier.ClassClassifier
-import org.spectral.mapper.classifier.ClassifierLevel
-import org.spectral.mapper.classifier.RankResult
+import org.spectral.mapper.classifier.*
 import org.spectral.mapper.util.CompareUtil
 import org.tinylog.kotlin.Logger
-import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.sqrt
 
 /**
@@ -26,6 +21,7 @@ class Mapper(val env: ClassEnvironment) {
      */
     private fun initClassifiers() {
         ClassClassifier.init()
+        MethodClassifier.init()
     }
 
     /**
@@ -34,9 +30,46 @@ class Mapper(val env: ClassEnvironment) {
     fun run() {
         initClassifiers()
 
+        /*
+         * Match any classes we can initially.
+         */
         if(matchClasses(ClassifierLevel.INITIAL)) {
             matchClasses(ClassifierLevel.INITIAL)
         }
+
+        /*
+         * Match recursively at each classification pass level.
+         */
+        matchRecursively(ClassifierLevel.SECONDARY)
+        matchRecursively(ClassifierLevel.EXTRA)
+        matchRecursively(ClassifierLevel.FINAL)
+
+        /*
+         * Print the matching statistics.
+         */
+        this.printMatchStatistics()
+    }
+
+    /**
+     * Matches all elements recursively until no more elements where matched during
+     * the last recursion pass.
+     *
+     * @param level ClassifierLevel
+     */
+    fun matchRecursively(level: ClassifierLevel) {
+        var matchedAny: Boolean
+        var matchedClassesBefore = true
+
+        do {
+            matchedAny = matchStaticMethods(level)
+
+            if(!matchedAny && !matchedClassesBefore) {
+                break
+            }
+
+            matchedAny = matchedAny or matchClasses(level).also { matchedClassesBefore = it }
+
+        } while(matchedAny)
     }
 
     /**
@@ -46,8 +79,8 @@ class Mapper(val env: ClassEnvironment) {
      * @return Boolean
      */
     fun matchClasses(level: ClassifierLevel): Boolean {
-        val classes = env.groupA.filter { !it.hasMatch() }
-        val cmpClasses = env.groupB.filter { !it.hasMatch() }
+        val classes = env.groupA.filter { it.real && !it.hasMatch() }
+        val cmpClasses = env.groupB.filter { it.real && !it.hasMatch() }
 
         val maxScore = ClassClassifier.getMaxScore(level)
         val maxMismatch = maxScore - calculateInverseScore(ABSOLUTE_MATCH_THRESHOLD * (1 - RELATIVE_MATCH_THRESHOLD), maxScore)
@@ -73,6 +106,79 @@ class Mapper(val env: ClassEnvironment) {
         Logger.info("Matched ${matches.size} classes (${classes.size - matches.size} unmatched, ${env.groupA.realClassesCount} total)")
 
         return !matches.isEmpty()
+    }
+
+    /**
+     * Matches all static methods with all static methods in any class
+     *
+     * @param level ClassifierLevel
+     * @return Boolean
+     */
+    fun matchStaticMethods(level: ClassifierLevel): Boolean {
+        val totalUnmatched = AtomicInteger()
+        val matches = getMatches(
+            level,
+            { it.methods.values.filter { it.real && it.isStatic } },
+            MethodClassifier,
+            MethodClassifier.getMaxScore(level),
+            totalUnmatched
+        )
+
+        matches.forEach { (key, value) ->
+            match(key, value)
+        }
+
+        Logger.info("Matched ${matches.size} static methods (${totalUnmatched.get()} unmatched)")
+
+        return matches.isNotEmpty()
+    }
+
+    /**
+     * Gets a match map for a matchable element type.
+     *
+     * @param level ClassifierLevel
+     * @param elementResolver Function1<Class, List<T>>
+     * @param classifier Classifier<T>
+     * @param maxScore Double
+     * @param totalUnmatched AtomicInteger
+     * @return Map<T, T>
+     */
+    private fun <T : Matchable<T>> getMatches(
+        level: ClassifierLevel,
+        elementResolver: (Class) -> List<T>,
+        classifier: Classifier<T>,
+        maxScore: Double,
+        totalUnmatched: AtomicInteger
+    ): Map<T, T> {
+        val classes = env.groupA.filter { it.real }
+
+        val maxMismatch = maxScore - calculateInverseScore(ABSOLUTE_MATCH_THRESHOLD * (1 - RELATIVE_MATCH_THRESHOLD), maxScore)
+        val results = ConcurrentHashMap<T, T>()
+
+        val dsts = mutableListOf<T>()
+        env.groupB.forEach { dsts.addAll(elementResolver(it)) }
+
+        classes.forEach { cls ->
+            var unmatched = 0
+
+            for(element in elementResolver(cls)) {
+                if(element.hasMatch()) continue
+
+                val ranking = classifier.rank(element, dsts, level, maxMismatch)
+
+                if(ranking.isValid(maxScore)) {
+                    results[element] = ranking[0].subject
+                } else {
+                    unmatched++
+                }
+            }
+
+            if(unmatched > 0) totalUnmatched.addAndGet(unmatched)
+        }
+
+        results.resolveConflicts()
+
+        return results
     }
 
     private fun <T> ConcurrentHashMap<T, T>.resolveConflicts() {
@@ -245,6 +351,25 @@ class Mapper(val env: ClassEnvironment) {
 
         a.match = b
         b.match = a
+    }
+
+    ///////////////////////////////////////////////////
+    // UTIL METHODS
+    ///////////////////////////////////////////////////
+
+    private fun printMatchStatistics() {
+        val classCount = env.groupA.filter { it.real && it.hasMatch() }.size
+        val classTotal = env.groupA.filter { it.real }.size
+        val methodCount = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real && it.hasMatch() } }.size
+        val methodTotal = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real } }.size
+        val fieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.hasMatch() } }.size
+        val fieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values }.size
+
+        println("===========================================")
+        println("Classes: $classCount / $classTotal (${(classCount.toDouble() / classTotal.toDouble()) * 100.0}%)")
+        println("Methods: $methodCount / $methodTotal (${(methodCount.toDouble() / methodTotal.toDouble()) * 100.0}%)")
+        println("Fields: $fieldCount / $fieldTotal (${(fieldCount.toDouble() / fieldTotal.toDouble()) * 100.0}%)")
+        println("===========================================")
     }
 
     companion object {
