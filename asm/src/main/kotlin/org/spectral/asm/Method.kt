@@ -99,6 +99,10 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
 
     val hierarchyMembers = newIdentityHashSet<Method>()
 
+    val parents = newIdentityHashSet<Method>()
+
+    val children = newIdentityHashSet<Method>()
+
     /**
      * Extracts the method arguments from the current method's instruction list.
      *

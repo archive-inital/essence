@@ -5,6 +5,8 @@ import org.objectweb.asm.tree.FieldInsnNode
 import org.objectweb.asm.tree.InvokeDynamicInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
 import org.objectweb.asm.tree.TypeInsnNode
+import org.spectral.asm.util.Interpreter
+import org.spectral.asm.util.newIdentityHashSet
 import org.spectral.asm.util.targetHandle
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
@@ -42,6 +44,13 @@ class FeatureExtractor(private val group: ClassGroup) {
          */
         group.forEach { c ->
             this.processC(c)
+        }
+
+        /*
+         * Processing pass D.
+         */
+        group.forEach { c ->
+            this.processD(c)
         }
     }
 
@@ -229,6 +238,63 @@ class FeatureExtractor(private val group: ClassGroup) {
 
             cur = toCheck.poll()
         }
+    }
+
+    /**
+     * The final class processing pass.
+     *
+     * @param cls Class
+     */
+    private fun processD(cls: Class) {
+        /*
+         * Build method parent/child hierarchy
+         */
+        cls.methods.values.forEach { m ->
+            if(m.hierarchyMembers.size > 1) {
+                /*
+                 * If there are more than one hierarchy member,
+                 * then the method has parent or child methods.
+                 */
+                calculateMethodRelationships(m, ArrayDeque(), mutableSetOf())
+            }
+        }
+
+        /*
+         * Finish the final updates on the fields.
+         */
+        cls.fields.values.forEach { f ->
+            f.hierarchyMembers.add(f)
+
+            if(f.writeRefs.size == 1) {
+                f.initializer.addAll(Interpreter.extractInitializer(f))
+            }
+        }
+    }
+
+    private fun calculateMethodRelationships(method: Method, toCheck: ArrayDeque<Class>, checked: MutableSet<Class>) {
+        if(method.isInitializer || method.isConstructor) return
+        if(method.isHierarchyBarrier()) return
+
+        if(method.owner.parent != null) toCheck.add(method.owner.parent!!)
+        toCheck.addAll(method.owner.interfaces)
+
+        var cur: Class? = toCheck.poll()
+        while(cur != null) {
+            if(!checked.add(cur)) continue
+
+            val m = cur.getMethod(method.name, method.desc)
+            if(m != null && !m.isHierarchyBarrier()) {
+                method.parents.add(m)
+                m.children.add(method)
+            } else {
+                if(cur.parent != null) toCheck.add(cur.parent!!)
+                toCheck.addAll(cur.interfaces)
+            }
+
+            cur = toCheck.poll()
+        }
+
+        checked.clear()
     }
 
     private fun Method.isHierarchyBarrier(): Boolean {

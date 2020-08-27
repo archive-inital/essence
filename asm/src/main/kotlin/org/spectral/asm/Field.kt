@@ -1,6 +1,7 @@
 package org.spectral.asm
 
 import org.objectweb.asm.Type
+import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.FieldNode
 import org.spectral.asm.util.newIdentityHashSet
 import java.lang.reflect.Modifier
@@ -27,9 +28,9 @@ class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) : Matc
 
     val writeRefs = newIdentityHashSet<Method>()
 
-    val strings = newIdentityHashSet<String>()
-
     val hierarchyMembers = newIdentityHashSet<Field>()
+
+    val initializer = mutableListOf<AbstractInsnNode>()
 
     override fun toString(): String {
         return "$owner.$name"

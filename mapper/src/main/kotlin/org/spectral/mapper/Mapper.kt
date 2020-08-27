@@ -20,6 +20,7 @@ class Mapper(val env: ClassEnvironment) {
     private fun initClassifiers() {
         ClassClassifier.init()
         MethodClassifier.init()
+        FieldClassifier.init()
     }
 
     /**
@@ -60,7 +61,9 @@ class Mapper(val env: ClassEnvironment) {
 
         do {
             matchedAny = matchStaticMethods(level)
+            matchedAny = matchedAny or matchStaticFields(level)
             matchedAny = matchedAny or matchMethods(level)
+            matchedAny = matchedAny or matchFields(level)
 
             if(!matchedAny && !matchedClassesBefore) {
                 break
@@ -157,6 +160,44 @@ class Mapper(val env: ClassEnvironment) {
         return matches.isNotEmpty()
     }
 
+    fun matchStaticFields(level: ClassifierLevel): Boolean {
+        val totalUnmatched = AtomicInteger()
+        val matches = getMatches(
+            level,
+            { it.fields.values.filter { it.isStatic } },
+            FieldClassifier,
+            FieldClassifier.getMaxScore(level),
+            totalUnmatched
+        )
+
+        matches.forEach { (key, value) ->
+            match(key, value)
+        }
+
+        Logger.info("Matched ${matches.size} static fields (${totalUnmatched.get()} unmatched)")
+
+        return matches.isNotEmpty()
+    }
+
+    fun matchFields(level: ClassifierLevel): Boolean {
+        val totalUnmatched = AtomicInteger()
+        val matches = getMatches(
+            level,
+            { it.fields.values.filter { !it.isStatic } },
+            FieldClassifier,
+            FieldClassifier.getMaxScore(level),
+            totalUnmatched
+        )
+
+        matches.forEach { (key, value) ->
+            match(key, value)
+        }
+
+        Logger.info("Matched ${matches.size} fields (${totalUnmatched.get()} unmatched)")
+
+        return matches.isNotEmpty()
+    }
+
     /**
      * Gets a match map for a matchable element type.
      *
@@ -172,11 +213,12 @@ class Mapper(val env: ClassEnvironment) {
         elementResolver: (Class) -> List<T>,
         classifier: Classifier<T>,
         maxScore: Double,
-        totalUnmatched: AtomicInteger
+        totalUnmatched: AtomicInteger,
+        maxMismatch: Double? = null
     ): Map<T, T> {
         val classes = env.groupA.filter { it.real }
 
-        val maxMismatch = maxScore - calculateInverseScore(ABSOLUTE_MATCH_THRESHOLD * (1 - RELATIVE_MATCH_THRESHOLD), maxScore)
+        val maxMismatchValue = maxMismatch ?: maxScore - calculateInverseScore(ABSOLUTE_MATCH_THRESHOLD * (1 - RELATIVE_MATCH_THRESHOLD), maxScore)
         val results = ConcurrentHashMap<T, T>()
 
         val dsts = mutableListOf<T>()
@@ -188,7 +230,7 @@ class Mapper(val env: ClassEnvironment) {
             for(element in elementResolver(cls)) {
                 if(element.hasMatch()) continue
 
-                val ranking = classifier.rank(element, dsts, level, maxMismatch)
+                val ranking = classifier.rank(element, dsts, level, maxMismatchValue)
 
                 if(ranking.isValid(maxScore)) {
                     results[element] = ranking[0].subject
@@ -259,14 +301,6 @@ class Mapper(val env: ClassEnvironment) {
 
         Logger.info("match CLASS [$a] -> [$b]")
 
-        if(a.hasMatch()) {
-            a.unmatchMembers()
-        }
-
-        if(b.hasMatch()) {
-            b.unmatchMembers()
-        }
-
         a.match = b
         b.match = a
 
@@ -326,14 +360,6 @@ class Mapper(val env: ClassEnvironment) {
 
         Logger.info("match METHOD [$a] -> [$b]")
 
-        if(a.hasMatch()) {
-            a.match!!.match = null
-        }
-
-        if(b.hasMatch()) {
-            b.match!!.match = null
-        }
-
         a.match = b
         b.match = a
 
@@ -370,9 +396,6 @@ class Mapper(val env: ClassEnvironment) {
 
         Logger.info("match FIELD [$a] -> [$b]")
 
-        if(a.hasMatch()) a.match!!.match = null
-        if(b.hasMatch()) b.match!!.match = null
-
         a.match = b
         b.match = a
     }
@@ -388,6 +411,8 @@ class Mapper(val env: ClassEnvironment) {
         val staticMethodTotal = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real && it.isStatic } }.size
         val methodCount = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real && it.hasMatch() } }.size
         val methodTotal = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real } }.size
+        val staticFieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.isStatic && it.hasMatch() } }.size
+        val staticFieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.isStatic } }.size
         val fieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.hasMatch() } }.size
         val fieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values }.size
 
@@ -395,6 +420,7 @@ class Mapper(val env: ClassEnvironment) {
         println("Classes: $classCount / $classTotal (${(classCount.toDouble() / classTotal.toDouble()) * 100.0}%)")
         println("Static Methods: $staticMethodCount / $staticMethodTotal (${(staticMethodCount.toDouble() / staticMethodTotal.toDouble()) * 100.0}%)")
         println("Methods: $methodCount / $methodTotal (${(methodCount.toDouble() / methodTotal.toDouble()) * 100.0}%)")
+        println("Static Fields: $staticFieldCount / $staticFieldTotal (${(staticFieldCount.toDouble() / staticFieldTotal.toDouble()) * 100.0}%)")
         println("Fields: $fieldCount / $fieldTotal (${(fieldCount.toDouble() / fieldTotal.toDouble()) * 100.0}%)")
         println("===========================================")
     }
