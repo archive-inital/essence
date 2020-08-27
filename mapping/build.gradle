@@ -1,21 +1,10 @@
-description = "Spectral Obfuscation Mapper"
+description = "Spectral Essence Mapping Models"
 
-apply plugin: 'java'
 apply plugin: 'maven-publish'
 
 def mavenUsername = hasProperty('mavenUsername') ? mavenUsername : System.getenv('MAVEN_USERNAME')
 def mavenPassword = hasProperty('mavenPassword') ? mavenPassword : System.getenv('MAVEN_PASSWORD')
 def mavenUrl = hasProperty('mavenUrl') ? mavenUrl : System.getenv('MAVEN_URL')
-
-dependencies {
-    implementation project(":mapping")
-    implementation "org.ow2.asm:asm:$asm"
-    implementation "org.ow2.asm:asm-util:$asm"
-    implementation "org.ow2.asm:asm-commons:$asm"
-    implementation "org.ow2.asm:asm-tree:$asm"
-    implementation "com.github.ajalt:clikt:$clikt"
-    implementation "me.tongfei:progressbar:$progressbar"
-}
 
 task sourceJar(type: Jar) {
     classifier = 'sources'
@@ -26,7 +15,7 @@ publishing {
     publications {
         maven(MavenPublication) {
             groupId = 'org.spectral'
-            artifactId = 'mapper'
+            artifactId = 'mapping'
             version = version
 
             from components.java

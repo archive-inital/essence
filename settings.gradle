@@ -1,4 +1,5 @@
 rootProject.name = 'essence'
 
-include ':asm'
 include ':mapper'
+include ':deobfuscator'
+include ':mapping'

@@ -25,6 +25,7 @@ allprojects {
         implementation "org.jetbrains.kotlin:kotlin-stdlib"
         implementation "org.tinylog:tinylog-api-kotlin:$tinylog"
         implementation "org.tinylog:tinylog-impl:$tinylog"
+        implementation "com.google.guava:guava:$guava"
 
         testRuntimeOnly "org.jetbrains.kotlin:kotlin-reflect"
         testImplementation "org.assertj:assertj-core:$assertj"
