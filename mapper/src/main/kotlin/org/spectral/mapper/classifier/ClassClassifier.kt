@@ -5,6 +5,7 @@ import org.spectral.asm.Class
 import org.spectral.asm.Field
 import org.spectral.asm.Method
 import org.spectral.asm.util.newIdentityHashSet
+import org.spectral.mapper.Mapper
 import org.spectral.mapper.util.CompareUtil
 import org.spectral.mapper.util.RankUtil
 import kotlin.math.max
@@ -35,6 +36,7 @@ object ClassClassifier : Classifier<Class>() {
         register(methodInReferences, 6, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
         register(fieldReadReferences, 5, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
         register(fieldWriteReferences, 5, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
+        register(membersFull, 10, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
     }
 
     /**
@@ -203,6 +205,42 @@ object ClassClassifier : Classifier<Class>() {
         val refsB = b.getFieldWriteReferences()
 
         return@classifier CompareUtil.compareFieldSets(refsA, refsB)
+    }
+
+    private val membersFull = classifier("members full") { a, b ->
+        val level = ClassifierLevel.EXTRA
+        var match = 0.0
+
+        if(a.methods.isNotEmpty() && b.methods.isNotEmpty()) {
+            val maxScore = MethodClassifier.getMaxScore(level)
+
+            a.methods.values.filter { it.real }.forEach { methodA ->
+                val ranking = MethodClassifier.rank(methodA, b.methods.values.toList(), level, Double.POSITIVE_INFINITY)
+                if(Mapper.isValidRank(ranking, maxScore)) {
+                    match += Mapper.calculateScore(ranking[0].score, maxScore)
+                }
+            }
+        }
+
+        if(a.fields.isNotEmpty() && b.fields.isNotEmpty()) {
+            val maxScore = FieldClassifier.getMaxScore(level)
+
+            a.fields.values.forEach { fieldA ->
+                val ranking = FieldClassifier.rank(fieldA, b.fields.values.toList(), level, Double.POSITIVE_INFINITY)
+                if(Mapper.isValidRank(ranking, maxScore)) {
+                    match += Mapper.calculateScore(ranking[0].score, maxScore)
+                }
+            }
+        }
+
+        val methodCount = max(a.methods.values.filter { it.real }.size, b.methods.values.filter { it.real }.size)
+        val fieldCount = max(a.fields.size, b.fields.size)
+
+        if(methodCount == 0 && fieldCount == 0) {
+            return@classifier 1.0
+        } else {
+            return@classifier match / (methodCount + fieldCount)
+        }
     }
 
     /////////////////////////////////////////////

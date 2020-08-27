@@ -22,10 +22,13 @@ object MethodClassifier : Classifier<Method>() {
         register(returnType, 5)
         register(classReferences, 3)
         register(stringConstants, 5)
+        register(parentMethods, 10)
+        register(childMethods, 3)
         register(inReferences, 6)
         register(outReferences, 6)
         register(fieldReads, 5)
         register(fieldWrites, 5)
+        register(code, 12, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
     }
 
     /**
@@ -94,6 +97,18 @@ object MethodClassifier : Classifier<Method>() {
 
     private val fieldWrites = classifier("field writes") { a, b ->
         return@classifier CompareUtil.compareFieldSets(a.fieldWriteRefs, b.fieldWriteRefs)
+    }
+
+    private val code = classifier("code") { a, b ->
+        return@classifier CompareUtil.compareInsns(a, b)
+    }
+
+    private val parentMethods = classifier("parent methods") { a, b ->
+        return@classifier CompareUtil.compareMethodSets(a.parents, b.parents)
+    }
+
+    private val childMethods = classifier("child methods") { a, b ->
+        return@classifier CompareUtil.compareMethodSets(a.children, b.children)
     }
 
     /////////////////////////////////////////////

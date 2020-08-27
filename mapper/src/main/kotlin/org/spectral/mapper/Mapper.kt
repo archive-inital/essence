@@ -442,6 +442,10 @@ class Mapper(val env: ClassEnvironment) {
             return ret * ret
         }
 
+        fun <T : RankResult<*>> isValidRank(ranking: List<T>, maxScore: Double): Boolean {
+            return ranking.isValid(maxScore)
+        }
+
         fun <T : RankResult<*>> List<T>.isValid(maxScore: Double): Boolean {
             if(this.isEmpty()) return false
 

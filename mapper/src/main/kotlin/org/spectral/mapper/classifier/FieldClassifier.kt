@@ -25,6 +25,7 @@ object FieldClassifier : Classifier<Field>() {
         register(writeReferences, 6)
         register(initValue, 7)
         register(initStrings, 8)
+        register(initCode, 10, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
     }
 
     /**
@@ -91,6 +92,16 @@ object FieldClassifier : Classifier<Field>() {
         stringsB.addAll(initB.extractStrings())
 
         return@classifier CompareUtil.compareSets(stringsA, stringsB)
+    }
+
+    private val initCode = classifier("init code") { a, b ->
+        val initA = a.initializer
+        val initB = b.initializer
+
+        if(initA.isEmpty() && initB.isEmpty()) return@classifier 1.0
+        if(initA.isEmpty() || initB.isEmpty()) return@classifier 0.0
+
+        return@classifier CompareUtil.compareInsns(initA, initB, a.group, b.group)
     }
 
     /////////////////////////////////////////////
