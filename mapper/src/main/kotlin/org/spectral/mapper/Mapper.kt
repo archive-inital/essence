@@ -61,8 +61,8 @@ class Mapper(val env: ClassEnvironment) {
 
         do {
             matchedAny = matchStaticMethods(level)
-            matchedAny = matchedAny or matchStaticFields(level)
             matchedAny = matchedAny or matchMethods(level)
+            matchedAny = matchedAny or matchStaticFields(level)
             matchedAny = matchedAny or matchFields(level)
 
             if(!matchedAny && !matchedClassesBefore) {
@@ -81,6 +81,8 @@ class Mapper(val env: ClassEnvironment) {
      * @return Boolean
      */
     fun matchClasses(level: ClassifierLevel): Boolean {
+        Logger.info("Analyzing Classes - Level: $level...")
+
         val classes = env.groupA.filter { it.real && !it.hasMatch() }
         val cmpClasses = env.groupB.filter { it.real && !it.hasMatch() }
 
@@ -117,6 +119,8 @@ class Mapper(val env: ClassEnvironment) {
      * @return Boolean
      */
     fun matchStaticMethods(level: ClassifierLevel): Boolean {
+        Logger.info("Analyzing static methods - Level: $level...")
+
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
@@ -142,6 +146,8 @@ class Mapper(val env: ClassEnvironment) {
      * @return Boolean
      */
     fun matchMethods(level: ClassifierLevel): Boolean {
+        Logger.info("Analyzing methods - Level: $level...")
+
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
@@ -161,6 +167,8 @@ class Mapper(val env: ClassEnvironment) {
     }
 
     fun matchStaticFields(level: ClassifierLevel): Boolean {
+        Logger.info("Analyzing static fields - Level: $level...")
+
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
@@ -180,6 +188,8 @@ class Mapper(val env: ClassEnvironment) {
     }
 
     fun matchFields(level: ClassifierLevel): Boolean {
+        Logger.info("Analyzing fields - Level: $level...")
+
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
