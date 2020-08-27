@@ -1,6 +1,8 @@
 package org.spectral.mapper.classifier
 
 import org.objectweb.asm.Opcodes.*
+import org.objectweb.asm.tree.AbstractInsnNode.METHOD_INSN
+import org.objectweb.asm.tree.MethodInsnNode
 import org.spectral.asm.Class
 import org.spectral.asm.Field
 import org.spectral.asm.Method
@@ -37,6 +39,7 @@ object ClassClassifier : Classifier<Class>() {
         register(fieldReadReferences, 5, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
         register(fieldWriteReferences, 5, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
         register(membersFull, 10, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
+        register(inRefsBci, 6, ClassifierLevel.FINAL)
     }
 
     /**
@@ -240,6 +243,56 @@ object ClassClassifier : Classifier<Class>() {
             return@classifier 1.0
         } else {
             return@classifier match / (methodCount + fieldCount)
+        }
+    }
+
+    private val inRefsBci = classifier("in refs (bci)") { a, b ->
+        var matched = 0
+        var mismatched = 0
+
+        for(src in a.methodTypeRefs) {
+            if(src.owner == a) continue
+
+            val dst = src.match
+
+            if(dst == null || !b.methodTypeRefs.contains(dst)) {
+                mismatched++
+                continue
+            }
+
+            val map = CompareUtil.mapInsns(src, dst)
+            if(map == null) continue
+
+            val insnsA = src.instructions
+            val insnsB = dst.instructions
+
+            for(srcIdx in 0 until map.size) {
+                if(map[srcIdx] < 0) continue
+
+                var insn = insnsA[srcIdx]
+                if(insn.type != METHOD_INSN) continue
+
+                var min = insn as MethodInsnNode
+                var owner = a.group[min.owner]
+
+                if(owner != a) continue
+
+                insn = insnsB[map[srcIdx]]
+                min = insn as MethodInsnNode
+                owner = b.group[min.owner]
+
+                if(owner != b) {
+                    mismatched++
+                } else {
+                    matched++
+                }
+            }
+        }
+
+        if(matched== 0 && mismatched == 0) {
+            return@classifier 1.0
+        } else {
+            return@classifier (matched / (matched + mismatched)).toDouble()
         }
     }
 

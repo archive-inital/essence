@@ -597,7 +597,9 @@ object CompareUtil {
      * @param b Method
      * @return IntArray
      */
-    fun mapInsns(a: Method, b: Method): IntArray {
+    fun mapInsns(a: Method, b: Method): IntArray? {
+        if(!a.real || !b.real) return null
+
         val insnsA = a.instructions
         val insnsB = b.instructions
 
@@ -606,7 +608,7 @@ object CompareUtil {
          * build some sort of cache system to leave the mapped source instructions
          * in for each iteration that way we do not need to compute each pass's mapped indexes.
          */
-        return mapInsn(insnsA, insnsB, a, b)
+        return mapInsns(insnsA, insnsB, a, b)
     }
 
     /**
@@ -619,7 +621,7 @@ object CompareUtil {
      * @param methodB Method
      * @return IntArray
      */
-    fun mapInsn(
+    fun mapInsns(
         listA: InsnList,
         listB: InsnList,
         methodA: Method,
