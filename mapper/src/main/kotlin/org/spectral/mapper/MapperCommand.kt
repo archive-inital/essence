@@ -2,39 +2,54 @@ package org.spectral.mapper
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.arguments.validate
+import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
+import org.spectral.mapping.io.MappingsWriter
+import org.tinylog.kotlin.Logger
 
 /**
- * The Mapper CLI console command used to start and set
- * flags for the mapper program.
+ * The Console or CLI usage of the program.
  */
 class MapperCommand : CliktCommand(
     name = "Mapper",
-    help = "Generates mappings between two JAR file obfuscations by similarity scoring.",
-    printHelpOnEmptyArgs = true,
-    invokeWithoutSubcommand = true
+    help = "Maps obfuscation names between versions or obfuscation iterations."
 ) {
 
-    /**
-     * The JAR file which has been renamed. This is the file that will be used
-     * and mapped to [jarFileB]
-     */
-    private val jarFileA by argument(name = "Mapped Jar File", help = "The file path to the mapped jar file.")
-        .file(mustExist = true, canBeDir = false)
-        .validate { it.extension == ".jar" }
+    private val mappedJarFile by argument(name = "Mapped Jar", help = "The path to the old JAR file").file(mustExist = true, canBeDir = false)
+    private val targetJarFile by argument(name = "Target Jar", help = "The path to the new JAR file").file(mustExist = true, canBeDir = false)
+
+    private val exportDir by option("-e", "--export", help = "Export mappings directory path").file(mustExist = false, canBeDir = true)
 
     /**
-     * The target, or the non renamed obfuscated JAR file to generate mappings for.
-     */
-    private val jarFileB by argument(name = "Target Jar File", help = "The file path to the target jar file.")
-        .file(mustExist = true, canBeDir = false)
-        .validate { it.extension == ".jar" }
-
-    /**
-     * Run the command logic.
+     * Executes the command
      */
     override fun run() {
+        Logger.info("Initializing...")
 
+        /*
+         * Build the mapper instance.
+         */
+        val mapper = Mapper.Builder()
+            .mappedInput(mappedJarFile)
+            .targetInput(targetJarFile)
+            .build()
+
+        /*
+         * Run the mapper.
+         */
+        mapper.run()
+
+        /*
+         * If the export directory is specified,
+         * Export the mappings to [exportDir] folder.
+         */
+        if(exportDir != null) {
+            Logger.info("Exporting mappings to folder: '${exportDir!!.path}")
+
+            val mappings = MappingBuilder.buildMappings(mapper.classes!!)
+            MappingsWriter(mappings).write(exportDir!!)
+
+            Logger.info("Mappings have finished exporting.")
+        }
     }
 }
