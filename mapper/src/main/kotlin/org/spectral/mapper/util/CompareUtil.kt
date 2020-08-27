@@ -6,6 +6,7 @@ import org.objectweb.asm.Type
 import org.objectweb.asm.tree.*
 import org.spectral.asm.*
 import org.spectral.asm.util.newIdentityHashSet
+import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -587,5 +588,151 @@ object CompareUtil {
         return (this.tag == Opcodes.H_INVOKESTATIC && this.owner == "java/lang/invoke/LambdaMetafactory" && (this.name == "metafactory" && this.desc == "(Ljava/lang/invoke/MethodHandles\$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
                 || this.name == "altMetafactory" && this.desc == "(Ljava/lang/invoke/MethodHandles\$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;")
                 && !this.isInterface)
+    }
+
+    /**
+     * Maps the instruction indexes of two given [Method] objects.
+     *
+     * @param a Method
+     * @param b Method
+     * @return IntArray
+     */
+    fun mapInsns(a: Method, b: Method): IntArray {
+        val insnsA = a.instructions
+        val insnsB = b.instructions
+
+        /*
+         * If this becomes too slow to compute, we may want to
+         * build some sort of cache system to leave the mapped source instructions
+         * in for each iteration that way we do not need to compute each pass's mapped indexes.
+         */
+        return mapInsn(insnsA, insnsB, a, b)
+    }
+
+    /**
+     * Maps the instructions from two [InsnList] objects and returns
+     * an array of mapped index values.
+     *
+     * @param listA InsnList
+     * @param listB InsnList
+     * @param methodA Method
+     * @param methodB Method
+     * @return IntArray
+     */
+    fun mapInsn(
+        listA: InsnList,
+        listB: InsnList,
+        methodA: Method,
+        methodB: Method
+    ): IntArray {
+        return mapLists(
+            listA,
+            listB,
+            InsnList::get,
+            InsnList::size,
+            { insnA: AbstractInsnNode, insnB: AbstractInsnNode ->
+                compareInsns(insnA, insnB, listA, listB, { insns: InsnList, insn: AbstractInsnNode -> insns.indexOf(insn) }, methodA.group, methodB.group)
+            }
+        )
+    }
+
+    /**
+     * Maps two lists of generic types index's together using matrix distance calculations
+     *
+     * @param listA T
+     * @param listB T
+     * @param elementRetriever Function2<T, Int, U>
+     * @param sizeRetriever Function1<T, Int>
+     * @param predicate Function2<U, U, Boolean>
+     * @return IntArray
+     */
+    private fun <T, U> mapLists(
+        listA: T,
+        listB: T,
+        elementRetriever: (T, Int) -> U,
+        sizeRetriever: (T) -> Int,
+        predicate: (U, U) -> Boolean
+    ): IntArray {
+        val sizeA = sizeRetriever(listA)
+        val sizeB = sizeRetriever(listB)
+
+        if(sizeA == 0 && sizeB == 0) return IntArray(0)
+
+        val ret = IntArray(sizeA)
+
+        if(sizeA == 0 || sizeB == 0) {
+            Arrays.fill(ret, -1)
+            return ret
+        }
+
+        if(sizeA == sizeB) {
+            var match = true
+
+            for(i in 0 until sizeA) {
+                if(!predicate(elementRetriever(listA, i), elementRetriever(listB, i))) {
+                    match = false
+                    break
+                }
+            }
+
+            if(match) {
+                for(i in ret.indices) {
+                    ret[i] = i
+                }
+
+                return ret
+            }
+        }
+
+        /*
+         * Levenshtein Distance Calculations
+         */
+        val size = sizeA + 1
+        val v = IntArray(size * (sizeB + 1))
+
+        for(i in 1 .. sizeA) {
+            v[i + 0] = i
+        }
+
+        for(j in 1 .. sizeB) {
+            v[0 + j * size] = j
+        }
+
+        for(j in 1 .. sizeB) {
+            for(i in 1 .. sizeA) {
+                val cost = if(predicate(elementRetriever(listA, i - 1), elementRetriever(listB, j - 1))) 0 else 1
+                v[i + j * size] = min(min(v[i - 1 + j * size] + 1, v[i + (j - 1) * size] + 1), v[i -1 + (j - 1) * size] + cost)
+            }
+        }
+
+        /*
+         * Reduction of index cordinates.
+         */
+        var i = sizeA
+        var j = sizeB
+
+        while (true) {
+            val c = v[i + j * size]
+            if (i > 0 && v[i - 1 + j * size] + 1 == c) {
+                ret[i - 1] = -1
+                i--
+            } else if (j > 0 && v[i + (j - 1) * size] + 1 == c) {
+                j--
+            } else if (i > 0 && j > 0) {
+                val dist = c - v[i - 1 + (j - 1) * size]
+                if (dist == 1) {
+                    ret[i - 1] = -1
+                } else {
+                    assert(dist == 0)
+                    ret[i - 1] = j - 1
+                }
+                i--
+                j--
+            } else {
+                break
+            }
+        }
+
+        return ret
     }
 }
