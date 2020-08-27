@@ -6,6 +6,11 @@ def mavenUsername = hasProperty('mavenUsername') ? mavenUsername : System.getenv
 def mavenPassword = hasProperty('mavenPassword') ? mavenPassword : System.getenv('MAVEN_PASSWORD')
 def mavenUrl = hasProperty('mavenUrl') ? mavenUrl : System.getenv('MAVEN_URL')
 
+dependencies {
+    implementation "com.fasterxml.jackson.core:jackson-databind:$databind"
+    implementation "com.fasterxml.jackson.module:jackson-module-kotlin:$databind"
+}
+
 task sourceJar(type: Jar) {
     classifier = 'sources'
     from sourceSets.main.allSource

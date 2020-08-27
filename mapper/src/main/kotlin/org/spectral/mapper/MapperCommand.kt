@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import org.spectral.mapping.io.MappingsWriter
+import org.spectral.mapping.io.loadOpaqueValues
 import org.tinylog.kotlin.Logger
 
 /**
@@ -19,6 +20,7 @@ class MapperCommand : CliktCommand(
     private val targetJarFile by argument(name = "Target Jar", help = "The path to the new JAR file").file(mustExist = true, canBeDir = false)
 
     private val exportDir by option("-e", "--export", help = "Export mappings directory path").file(mustExist = false, canBeDir = true)
+    private val opaqueValuesFile by option("-o", "--opaques", help = "The opaque values JSON file to load mappings with").file(mustExist = false, canBeDir = false)
 
     /**
      * Executes the command
@@ -47,6 +49,15 @@ class MapperCommand : CliktCommand(
             Logger.info("Exporting mappings to folder: '${exportDir!!.path}")
 
             val mappings = MappingBuilder.buildMappings(mapper.classes!!)
+
+            /*
+             * If the opaque predicate values JSON file is specified,
+             * Update the opaque method values.
+             */
+            if(opaqueValuesFile != null) {
+                mappings.loadOpaqueValues(opaqueValuesFile!!)
+            }
+
             MappingsWriter(mappings).write(exportDir!!)
 
             Logger.info("Mappings have finished exporting.")

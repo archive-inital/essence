@@ -9,4 +9,5 @@ ext {
     jimfs = "1.1"
     progressbar = "0.8.1"
     guava = "29.0-jre"
+    databind = "2.11.2"
 }

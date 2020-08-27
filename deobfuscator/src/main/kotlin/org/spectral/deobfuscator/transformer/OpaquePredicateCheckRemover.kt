@@ -1,12 +1,17 @@
 package org.spectral.deobfuscator.transformer
 
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.objectweb.asm.Opcodes
+import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.*
 import org.spectral.deobfuscator.asm.ClassGroupExt
 import org.spectral.deobfuscator.Transformer
 import org.tinylog.kotlin.Logger
+import java.io.File
 import java.lang.reflect.Modifier
+import java.util.*
 
 /**
  * Removes the check for the last parameter primitive constant. If the garbage value
@@ -16,8 +21,11 @@ import java.lang.reflect.Modifier
  */
 class OpaquePredicateCheckRemover : Transformer {
 
+    internal var exportOpaques: Boolean = false
+
     override fun transform(group: ClassGroupExt) {
         var counter = 0
+        val opaqueValues = TreeMap<String, Int>()
 
         /**
          * Loop through each method, in each class.
@@ -46,6 +54,9 @@ class OpaquePredicateCheckRemover : Transformer {
                         continue
                     }
 
+                    val pushedConstant = insn.next.intValue
+                    val predicateOpcode = insn.next.next.opcode
+
                     val label = (insn.next.next as JumpInsnNode).label.label
 
                     /**
@@ -62,12 +73,27 @@ class OpaquePredicateCheckRemover : Transformer {
                         counter++
                     }
 
-                    insns.add(JumpInsnNode(Opcodes.GOTO, LabelNode(label)))
+                    insns.add(JumpInsnNode(GOTO, LabelNode(label)))
+                    opaqueValues["${c.name}.${m.name}${dropLastArg(m.desc)}"] = passingVal(pushedConstant, predicateOpcode)
                 }
             }
         }
 
         Logger.info("Removed $counter opaque predicate garbage value checks.")
+
+        if(exportOpaques) {
+            /*
+             * Export the garbage values to a json data file.
+             */
+
+            val file = File(EXPORT_FILE)
+            if(file.exists()) file.delete()
+
+            val jsonMapper = jacksonObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
+            jsonMapper.writeValue(file, opaqueValues)
+
+            Logger.info("Exported the opaque values to JSON file at '${file.path}'.")
+        }
     }
 
     /**
@@ -169,5 +195,33 @@ class OpaquePredicateCheckRemover : Transformer {
             Opcodes.RETURN, Opcodes.ARETURN, Opcodes.DRETURN, Opcodes.FRETURN, Opcodes.IRETURN, Opcodes.LRETURN -> true
             else -> false
         }
+    }
+
+    private fun passingVal(pushed: Int, ifOpcode: Int): Int {
+        return when(ifOpcode) {
+            IF_ICMPEQ -> pushed
+            IF_ICMPGE,
+            IF_ICMPGT -> pushed + 1
+            IF_ICMPLE,
+            IF_ICMPLT,
+            IF_ICMPNE -> pushed - 1
+            else -> error(ifOpcode)
+        }
+    }
+
+    val AbstractInsnNode.intValue: Int get() {
+        if (opcode in 2..8) return opcode - 3
+        if (opcode == BIPUSH || opcode == SIPUSH) return (this as IntInsnNode).operand
+        if (this is LdcInsnNode && cst is Int) return cst as Int
+        error(this)
+    }
+
+    private fun dropLastArg(desc: String): String {
+        val type = Type.getMethodType(desc)
+        return Type.getMethodDescriptor(type.returnType, *type.argumentTypes.copyOf(type.argumentTypes.size - 1))
+    }
+
+    companion object {
+        private const val EXPORT_FILE = "opaque_values.json"
     }
 }
