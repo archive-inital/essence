@@ -1,4 +1,4 @@
-package org.spectral.asm
+package org.spectral.mapper.asm
 
 import org.objectweb.asm.tree.ClassNode
 import java.util.concurrent.ConcurrentHashMap

@@ -2,8 +2,7 @@ package org.spectral.mapper.classifier
 
 import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.tree.FieldInsnNode
-import org.spectral.asm.FeatureExtractor
-import org.spectral.asm.Field
+import org.spectral.mapper.asm.Field
 import org.spectral.mapper.util.CompareUtil
 import org.spectral.mapper.util.RankUtil
 import org.spectral.mapper.util.extractStrings
@@ -27,8 +26,8 @@ object FieldClassifier : Classifier<Field>() {
         register(initValue, 7)
         register(initStrings, 8)
         register(initCode, 10, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
-        register(readRefsBci, 6, ClassifierLevel.FINAL)
-        register(writeRefsBci, 6, ClassifierLevel.FINAL)
+        //register(readRefsBci, 6, ClassifierLevel.FINAL)
+        //register(writeRefsBci, 6, ClassifierLevel.FINAL)
     }
 
     /**

@@ -1,7 +1,8 @@
 package org.spectral.mapper.util
 
-import org.spectral.asm.Matchable
+import org.spectral.mapper.asm.Matchable
 import org.spectral.mapper.classifier.ClassifierCheck
+import org.spectral.mapper.classifier.ClassifierCheckResult
 import org.spectral.mapper.classifier.RankResult
 
 /**
@@ -49,6 +50,8 @@ object RankUtil {
         var score = 0.0
         var mismatch = 0.0
 
+        val results = mutableListOf<ClassifierCheckResult<T>>()
+
         checks.forEach { check ->
             val cScore = check.getScore(src, dst)
             val weight = check.weight
@@ -58,8 +61,9 @@ object RankUtil {
             if(mismatch >= maxMismatch) return null
 
             score += weightedScore
+            results.add(ClassifierCheckResult(check, cScore))
         }
 
-        return RankResult(dst, score)
+        return RankResult(dst, score, results)
     }
 }

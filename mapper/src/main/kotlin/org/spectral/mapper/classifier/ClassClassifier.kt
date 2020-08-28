@@ -3,10 +3,10 @@ package org.spectral.mapper.classifier
 import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.tree.AbstractInsnNode.METHOD_INSN
 import org.objectweb.asm.tree.MethodInsnNode
-import org.spectral.asm.Class
-import org.spectral.asm.Field
-import org.spectral.asm.Method
-import org.spectral.asm.util.newIdentityHashSet
+import org.spectral.mapper.asm.Class
+import org.spectral.mapper.asm.Field
+import org.spectral.mapper.asm.Method
+import org.spectral.mapper.asm.newIdentityHashSet
 import org.spectral.mapper.Mapper
 import org.spectral.mapper.util.CompareUtil
 import org.spectral.mapper.util.RankUtil
@@ -301,7 +301,7 @@ object ClassClassifier : Classifier<Class>() {
     /////////////////////////////////////////////
 
     private fun Class.getOutReferences(): Set<Class> {
-        val ret = newIdentityHashSet<Class>()
+        val ret = org.spectral.mapper.asm.newIdentityHashSet<Class>()
 
         this.methods.values.forEach { m ->
             ret.addAll(m.classRefs)
@@ -315,7 +315,7 @@ object ClassClassifier : Classifier<Class>() {
     }
 
     private fun Class.getInReferences(): Set<Class> {
-        val ret = newIdentityHashSet<Class>()
+        val ret = org.spectral.mapper.asm.newIdentityHashSet<Class>()
 
         this.methodTypeRefs.forEach { ret.add(it.owner) }
         this.fieldTypeRefs.forEach { ret.add(it.owner) }
@@ -324,7 +324,7 @@ object ClassClassifier : Classifier<Class>() {
     }
 
     private fun Class.getMethodOutReferences(): Set<Method> {
-        val ret = newIdentityHashSet<Method>()
+        val ret = org.spectral.mapper.asm.newIdentityHashSet<Method>()
 
         this.methods.values.forEach {
             ret.addAll(it.refsOut)
@@ -334,7 +334,7 @@ object ClassClassifier : Classifier<Class>() {
     }
 
     private fun Class.getMethodInReferences(): Set<Method> {
-        val ret = newIdentityHashSet<Method>()
+        val ret = org.spectral.mapper.asm.newIdentityHashSet<Method>()
 
         this.methods.values.forEach { ret.addAll(it.refsIn) }
 
@@ -342,7 +342,7 @@ object ClassClassifier : Classifier<Class>() {
     }
 
     private fun Class.getFieldReadReferences(): Set<Field> {
-        val ret = newIdentityHashSet<Field>()
+        val ret = org.spectral.mapper.asm.newIdentityHashSet<Field>()
 
         this.methods.values.forEach { ret.addAll(it.fieldReadRefs) }
 
@@ -350,7 +350,7 @@ object ClassClassifier : Classifier<Class>() {
     }
 
     private fun Class.getFieldWriteReferences(): Set<Field> {
-        val ret = newIdentityHashSet<Field>()
+        val ret = org.spectral.mapper.asm.newIdentityHashSet<Field>()
 
         this.methods.values.forEach { ret.addAll(it.fieldWriteRefs) }
 

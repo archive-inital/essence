@@ -1,4 +1,4 @@
-package org.spectral.asm
+package org.spectral.mapper.asm
 
 /**
  * Represents a local variable or argument of a [Method]
@@ -17,5 +17,5 @@ class Variable(
     val startOpIndex: Int,
     override val name: String
 ) : Matchable<Variable>() {
-
+    override val isStatic: Boolean = false
 }

@@ -2,11 +2,8 @@ package org.spectral.mapper
 
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkConstructor
-import io.mockk.spyk
-import org.spectral.asm.Class
-import org.spectral.asm.Field
-import org.spectral.asm.Method
+import org.spectral.mapper.asm.Class
+import org.spectral.mapper.asm.Method
 import org.spectral.mapper.util.CompareUtil
 import org.spekframework.spek2.Spek
 import org.spekframework.spek2.style.specification.describe

@@ -4,8 +4,7 @@ import org.objectweb.asm.Handle
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.*
-import org.spectral.asm.*
-import org.spectral.asm.util.newIdentityHashSet
+import org.spectral.mapper.asm.*
 import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
@@ -23,6 +22,7 @@ object CompareUtil {
         if(a == b) return true
         if(a.match != null) return a.match == b
         if(b.match != null) return b.match == a
+        if(a.real != b.real) return false
         if(!isObfuscatedName(a.name) && !isObfuscatedName(b.name)) {
             return a.name == b.name
         }
@@ -34,6 +34,7 @@ object CompareUtil {
         if(a == b) return true
         if(a.match != null) return a.match == b
         if(b.match != null) return b.match == a
+        if(a.real != b.real) return false
         if(!a.isStatic && !b.isStatic) {
             if(!isPotentiallyEqual(a.owner, b.owner)) return false
         }
@@ -104,77 +105,78 @@ object CompareUtil {
         return compareIdentitySets(a, b, CompareUtil::isPotentiallyEqual)
     }
 
-    private fun <T : Matchable<T>> compareIdentitySets(a: Set<T>, b: Set<T>, predicate: (T, T) -> Boolean): Double {
-        if(a.isEmpty() || b.isEmpty()) {
-            return if(a.isEmpty() && b.isEmpty()) 1.0 else 0.0
+    private fun <T : Matchable<T>?> compareIdentitySets(
+        set1: Set<T>,
+        set2: Set<T>,
+        comparator: (T, T) -> Boolean
+    ): Double {
+        if (set1.isEmpty() || set2.isEmpty()) {
+            return if (set1.isEmpty() && set2.isEmpty()) 1.0 else 0.0
         }
 
-        val setA = newIdentityHashSet(a)
-        val setB = newIdentityHashSet(b)
+        val setA = newIdentityHashSet(set1)
+        val setB = newIdentityHashSet(set2)
 
         val total = setA.size + setB.size
         var unmatched = 0
 
-        var it = setA.iterator()
-        while(it.hasNext()) {
-            val elementA = it.next()
-
-            if(setB.remove(elementA)) {
-                it.remove()
-            } else if(elementA.hasMatch()) {
-                if(!setB.remove(elementA.match)) {
+        // precise matches, nameObfuscated a
+        run {
+            val it = setA.iterator()
+            while (it.hasNext()) {
+                val a = it.next()
+                if (setB.remove(a)) {
+                    it.remove()
+                } else if (a!!.match != null) {
+                    if (!setB.remove(a.match)) {
+                        unmatched++
+                    }
+                    it.remove()
+                } else if (!isObfuscatedName(a.name)) {
                     unmatched++
+                    it.remove()
                 }
-
-                it.remove()
             }
         }
 
-        it = setB.iterator()
-        while(it.hasNext()) {
-            val elementB = it.next()
-
-            if(!isObfuscatedName(elementB.name)) {
+        val itB = setB.iterator()
+        while (itB.hasNext()) {
+            val b = itB.next()
+            if (!isObfuscatedName(b!!.name)) {
                 unmatched++
-                it.remove()
+                itB.remove()
             }
         }
-
-        it = setA.iterator()
-        while(it.hasNext()) {
-            val elementA = it.next()
-
+        val itC = setA.iterator()
+        while (itC.hasNext()) {
+            val a = itC.next()
+            assert(a!!.match == null && (isObfuscatedName(a.name)))
             var found = false
-
-            for(elementB in setB) {
-                if(predicate(elementA, elementB)) {
+            for (b in setB) {
+                if (comparator(a, b)) {
                     found = true
                     break
                 }
             }
-
-            if(!found) {
+            if (!found) {
                 unmatched++
-                it.remove()
+                itC.remove()
             }
         }
-
-        for(elementB in setB) {
+        for (b in setB) {
             var found = false
-
-            for(elementA in setA) {
-                if(predicate(elementA, elementB)) {
+            for (a in setA) {
+                if (comparator(a, b)) {
                     found = true
                     break
                 }
             }
-
-            if(!found) {
+            if (!found) {
                 unmatched++
             }
         }
-
-        return ((total - unmatched) / total).toDouble()
+        assert(unmatched <= total)
+        return (total - unmatched).toDouble() / total
     }
 
     /**
@@ -196,7 +198,13 @@ object CompareUtil {
         return compareLists(
             insnsA, insnsB,
             InsnList::get, InsnList::size,
-            { ia, ib -> compareInsns(ia, ib, insnsA, insnsB, { insns: InsnList, insn: AbstractInsnNode -> insns.indexOf(insn) }, a.group, b.group) }
+            { ia, ib ->
+                compareInsns(ia, ib, insnsA, insnsB, { insns: InsnList, insn: AbstractInsnNode ->
+                    insns.indexOf(
+                        insn
+                    )
+                }, a.group, b.group)
+            }
         )
     }
 
@@ -212,11 +220,22 @@ object CompareUtil {
      * @param groupB ClassGroup
      * @return Double
      */
-    fun compareInsns(listA: List<AbstractInsnNode>, listB: List<AbstractInsnNode>, groupA: ClassGroup, groupB: ClassGroup): Double {
+    fun compareInsns(
+        listA: List<AbstractInsnNode>,
+        listB: List<AbstractInsnNode>,
+        groupA: ClassGroup,
+        groupB: ClassGroup
+    ): Double {
         return compareLists(
             listA, listB,
             List<AbstractInsnNode>::get, List<AbstractInsnNode>::size,
-            { ia, ib -> compareInsns(ia, ib, listA, listB, { insns: List<AbstractInsnNode>, insn: AbstractInsnNode -> insns.indexOf(insn) }, groupA, groupB) }
+            { ia, ib ->
+                compareInsns(ia, ib, listA, listB, { insns: List<AbstractInsnNode>, insn: AbstractInsnNode ->
+                    insns.indexOf(
+                        insn
+                    )
+                }, groupA, groupB)
+            }
         )
     }
 
@@ -366,8 +385,8 @@ object CompareUtil {
                 val fieldA = clsA.resolveField(a.name, a.desc)
                 val fieldB = clsB.resolveField(b.name, b.desc)
 
-                if(fieldA == null && fieldB == null) return true
-                if(fieldA == null || fieldB == null) return false
+                if (fieldA == null && fieldB == null) return true
+                if (fieldA == null || fieldB == null) return false
 
                 return isPotentiallyEqual(fieldA, fieldB)
             }
@@ -386,15 +405,15 @@ object CompareUtil {
                 val a = insnA as InvokeDynamicInsnNode
                 val b = insnB as InvokeDynamicInsnNode
 
-                if(a.bsm != b.bsm) return false
+                if (a.bsm != b.bsm) return false
 
-                if(a.bsm.isJavaLambda) {
+                if (a.bsm.isJavaLambda) {
                     val implA = a.bsmArgs[1] as Handle
                     val implB = b.bsmArgs[1] as Handle
 
-                    if(implA.tag != implB.tag) return false
+                    if (implA.tag != implB.tag) return false
 
-                    when(implA.tag) {
+                    when (implA.tag) {
                         /*
                          * Check for known Java impl tags.
                          */
@@ -422,22 +441,27 @@ object CompareUtil {
                  * Solution is just to see if the jumps match up or down or adjacent
                  * to the current control flow block.
                  */
-                return Integer.signum(position(listA, a.label) - position(listA, a)) == Integer.signum(position(listB, b.label) - position(listB, b))
+                return Integer.signum(position(listA, a.label) - position(listA, a)) == Integer.signum(
+                    position(
+                        listB,
+                        b.label
+                    ) - position(listB, b)
+                )
             }
 
             AbstractInsnNode.LDC_INSN -> {
                 val a = insnA as LdcInsnNode
                 val b = insnB as LdcInsnNode
 
-                if(a.cst::class != b.cst::class) return false
+                if (a.cst::class != b.cst::class) return false
 
-                if(a.cst::class == Type::class) {
+                if (a.cst::class == Type::class) {
                     val typeA = a.cst as Type
                     val typeB = b.cst as Type
 
-                    if(typeA.sort != typeB.sort) return false
+                    if (typeA.sort != typeB.sort) return false
 
-                    when(typeA.sort) {
+                    when (typeA.sort) {
                         Type.ARRAY, Type.OBJECT -> {
                             val clsA = groupA[typeA.className]
                             val clsB = groupB[typeB.className]
@@ -457,7 +481,7 @@ object CompareUtil {
                 val a = insnA as IincInsnNode
                 val b = insnB as IincInsnNode
 
-                if(a.incr != b.incr) return false
+                if (a.incr != b.incr) return false
 
                 /*
                  * Implement local variable support
@@ -483,7 +507,7 @@ object CompareUtil {
                 val a = insnA as MultiANewArrayInsnNode
                 val b = insnB as MultiANewArrayInsnNode
 
-                if(a.dims != b.dims) return false
+                if (a.dims != b.dims) return false
 
                 val clsA = groupA[a.desc]
                 val clsB = groupB[b.desc]
@@ -515,65 +539,53 @@ object CompareUtil {
      * @param predicate Function2<U, U, Boolean>
      * @return Double
      */
-    private fun <T, U> compareLists(
+    fun <T, U> compareLists(
         listA: T,
         listB: T,
         elementRetriever: (T, Int) -> U,
         sizeRetriever: (T) -> Int,
-        predicate: (U, U) -> Boolean
+        elementComparator: (U, U) -> Boolean
     ): Double {
-        val sizeA = sizeRetriever(listA)
-        val sizeB = sizeRetriever(listB)
-
-        if(sizeA == 0 && sizeB == 0) return 1.0
-        if(sizeA == 0 || sizeB == 0) return 0.0
-
-        if(sizeA == sizeB) {
+        val sizeA: Int = sizeRetriever(listA)
+        val sizeB: Int = sizeRetriever(listB)
+        if (sizeA == 0 && sizeB == 0) return 1.0
+        if (sizeA == 0 || sizeB == 0) return 0.0
+        if (sizeA == sizeB) {
             var match = true
-
-            for(i in 0 until sizeA) {
-                if(!predicate(elementRetriever(listA, i), elementRetriever(listB, i))) {
+            for (i in 0 until sizeA) {
+                if (!elementComparator(elementRetriever(listA, i), elementRetriever(listB, i))) {
                     match = false
                     break
                 }
             }
-
-            if(match) return 1.0
+            if (match) return 1.0
         }
 
-        /*
-         * Match the list elements by iterating over them using
-         * the Levenshtein distance formula.
-         *
-         * https://en.wikipedia.org/wiki/Levenshtein_distance#Iterative_with_two_matrix_rows
-         */
-
+        // levenshtein distance as per wp (https://en.wikipedia.org/wiki/Levenshtein_distance#Iterative_with_two_matrix_rows)
         val v0 = IntArray(sizeB + 1)
         val v1 = IntArray(sizeB + 1)
-
-        for(i in v0.indices) {
+        for (i in v0.indices) {
             v0[i] = i
         }
-
-        for(i in 0 until sizeA) {
+        for (i in 0 until sizeA) {
             v1[0] = i + 1
-
-            for(j in 0 until sizeB) {
-                val cost = if(predicate(elementRetriever(listA, i), elementRetriever(listB, j))) 0 else 1
+            for (j in 0 until sizeB) {
+                val cost = if (elementComparator(
+                        elementRetriever(listA, i),
+                        elementRetriever(listB, j)
+                    )
+                ) 0 else 1
                 v1[j + 1] = min(min(v1[j] + 1, v0[j + 1] + 1), v0[j] + cost)
             }
-
-            for(j in v0.indices) {
+            for (j in v0.indices) {
                 v0[j] = v1[j]
             }
         }
-
         val distance = v1[sizeB]
-        val upperBound = max(sizeA, sizeB)
-
-        return (1 - distance / upperBound).toDouble()
+        val upperBound = Math.max(sizeA, sizeB)
+        assert(distance in 0..upperBound)
+        return 1 - distance.toDouble() / upperBound
     }
-
     /**
      * Gets whether an invocation instruction is calling an interface reference.
      */
@@ -633,7 +645,15 @@ object CompareUtil {
             InsnList::get,
             InsnList::size,
             { insnA: AbstractInsnNode, insnB: AbstractInsnNode ->
-                compareInsns(insnA, insnB, listA, listB, { insns: InsnList, insn: AbstractInsnNode -> insns.indexOf(insn) }, methodA.group, methodB.group)
+                compareInsns(
+                    insnA,
+                    insnB,
+                    listA,
+                    listB,
+                    { insns: InsnList, insn: AbstractInsnNode -> insns.indexOf(insn) },
+                    methodA.group,
+                    methodB.group
+                )
             }
         )
     }
@@ -653,66 +673,57 @@ object CompareUtil {
         listB: T,
         elementRetriever: (T, Int) -> U,
         sizeRetriever: (T) -> Int,
-        predicate: (U, U) -> Boolean
+        elementComparator: (U, U) -> Boolean
     ): IntArray {
-        val sizeA = sizeRetriever(listA)
-        val sizeB = sizeRetriever(listB)
-
-        if(sizeA == 0 && sizeB == 0) return IntArray(0)
-
+        val sizeA: Int = sizeRetriever(listA)
+        val sizeB: Int = sizeRetriever(listB)
+        if (sizeA == 0 && sizeB == 0) return IntArray(0)
         val ret = IntArray(sizeA)
-
-        if(sizeA == 0 || sizeB == 0) {
+        if (sizeA == 0 || sizeB == 0) {
             Arrays.fill(ret, -1)
             return ret
         }
-
-        if(sizeA == sizeB) {
+        if (sizeA == sizeB) {
             var match = true
-
-            for(i in 0 until sizeA) {
-                if(!predicate(elementRetriever(listA, i), elementRetriever(listB, i))) {
+            for (i in 0 until sizeA) {
+                if (!elementComparator(elementRetriever(listA, i), elementRetriever(listB, i))) {
                     match = false
                     break
                 }
             }
-
-            if(match) {
-                for(i in ret.indices) {
+            if (match) {
+                for (i in ret.indices) {
                     ret[i] = i
                 }
-
                 return ret
             }
         }
 
-        /*
-         * Levenshtein Distance Calculations
-         */
+        // levenshtein distance as per wp (https://en.wikipedia.org/wiki/Levenshtein_distance#Iterative_with_two_matrix_rows)
         val size = sizeA + 1
         val v = IntArray(size * (sizeB + 1))
-
-        for(i in 1 .. sizeA) {
+        for (i in 1..sizeA) {
             v[i + 0] = i
         }
-
-        for(j in 1 .. sizeB) {
+        for (j in 1..sizeB) {
             v[0 + j * size] = j
         }
-
-        for(j in 1 .. sizeB) {
-            for(i in 1 .. sizeA) {
-                val cost = if(predicate(elementRetriever(listA, i - 1), elementRetriever(listB, j - 1))) 0 else 1
-                v[i + j * size] = min(min(v[i - 1 + j * size] + 1, v[i + (j - 1) * size] + 1), v[i -1 + (j - 1) * size] + cost)
+        for (j in 1..sizeB) {
+            for (i in 1..sizeA) {
+                val cost = if (elementComparator(
+                        elementRetriever(listA, i - 1),
+                        elementRetriever(listB, j - 1)
+                    )
+                ) 0 else 1
+                v[i + j * size] = min(
+                    min(v[i - 1 + j * size] + 1, v[i + (j - 1) * size] + 1),
+                    v[i - 1 + (j - 1) * size] + cost
+                )
             }
         }
 
-        /*
-         * Reduction of index cordinates.
-         */
         var i = sizeA
         var j = sizeB
-
         while (true) {
             val c = v[i + j * size]
             if (i > 0 && v[i - 1 + j * size] + 1 == c) {
@@ -734,7 +745,6 @@ object CompareUtil {
                 break
             }
         }
-
         return ret
     }
 }

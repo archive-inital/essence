@@ -1,13 +1,10 @@
-package org.spectral.asm
+package org.spectral.mapper.asm
 
 import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.tree.FieldInsnNode
 import org.objectweb.asm.tree.InvokeDynamicInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
 import org.objectweb.asm.tree.TypeInsnNode
-import org.spectral.asm.util.Interpreter
-import org.spectral.asm.util.newIdentityHashSet
-import org.spectral.asm.util.targetHandle
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
 import java.util.stream.Collectors

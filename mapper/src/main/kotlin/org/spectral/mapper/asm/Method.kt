@@ -1,4 +1,4 @@
-package org.spectral.asm
+package org.spectral.mapper.asm
 
 import org.objectweb.asm.Opcodes.ACC_STATIC
 import org.objectweb.asm.Opcodes.ASM8
@@ -7,7 +7,6 @@ import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.InsnList
 import org.objectweb.asm.tree.LocalVariableNode
 import org.objectweb.asm.tree.MethodNode
-import org.spectral.asm.util.newIdentityHashSet
 import java.lang.reflect.Modifier
 
 /**
@@ -31,6 +30,9 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
         access = node.access
         type = Type.getMethodType(desc)
         instructions = node.instructions
+        if(node.signature != null) {
+            signature = Signature.MethodSignature.parse(node.signature, group)
+        }
     }
 
     /**
@@ -79,7 +81,9 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
 
     lateinit var variables: List<Variable>
 
-    val isStatic: Boolean get() = Modifier.isStatic(access)
+    lateinit var signature: Signature.MethodSignature
+
+    override val isStatic: Boolean get() = Modifier.isStatic(access)
 
     val isPrivate: Boolean get() = Modifier.isPrivate(access)
 
@@ -217,8 +221,10 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
                 start = start.previous
             }
 
-            ret.add(Variable(group, this, false, i, localVar.index, node.localVariables.indexOf(localVar),
-            group.getOrCreate(localVar.desc), startInsn, endInsn, startOpIndex, localVar.name))
+            ret.add(
+                Variable(group, this, false, i, localVar.index, node.localVariables.indexOf(localVar),
+            group.getOrCreate(localVar.desc), startInsn, endInsn, startOpIndex, localVar.name)
+            )
         }
 
         return ret

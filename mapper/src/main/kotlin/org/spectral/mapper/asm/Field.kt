@@ -1,9 +1,8 @@
-package org.spectral.asm
+package org.spectral.mapper.asm
 
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.FieldNode
-import org.spectral.asm.util.newIdentityHashSet
 import java.lang.reflect.Modifier
 
 class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) : Matchable<Field>() {
@@ -20,7 +19,7 @@ class Field(val group: ClassGroup, val owner: Class, val node: FieldNode) : Matc
 
     lateinit var typeClass: Class
 
-    val isStatic: Boolean = Modifier.isStatic(access)
+    override val isStatic: Boolean = Modifier.isStatic(access)
 
     val isPrivate: Boolean = Modifier.isPrivate(access)
 

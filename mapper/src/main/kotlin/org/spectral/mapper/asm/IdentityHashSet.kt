@@ -1,4 +1,4 @@
-package org.spectral.asm.util
+package org.spectral.mapper.asm
 
 import java.util.*
 

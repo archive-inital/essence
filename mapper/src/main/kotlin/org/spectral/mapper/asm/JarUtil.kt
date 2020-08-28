@@ -1,4 +1,4 @@
-package org.spectral.asm.util
+package org.spectral.mapper.asm
 
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.tree.ClassNode

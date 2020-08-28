@@ -7,5 +7,7 @@ dependencies {
     implementation "org.ow2.asm:asm-commons:$asm"
     implementation "org.ow2.asm:asm-tree:$asm"
     implementation "com.github.ajalt:clikt:$clikt"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines"
+    implementation "me.tongfei:progressbar:$progressbar"
     testImplementation "com.google.jimfs:jimfs:$jimfs"
 }

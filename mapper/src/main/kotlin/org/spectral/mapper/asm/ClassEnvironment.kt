@@ -1,6 +1,5 @@
-package org.spectral.asm
+package org.spectral.mapper.asm
 
-import org.spectral.asm.util.JarUtil
 import java.io.File
 
 /**

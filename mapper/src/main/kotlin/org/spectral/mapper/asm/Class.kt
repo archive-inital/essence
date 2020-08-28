@@ -1,10 +1,8 @@
-package org.spectral.asm
+package org.spectral.mapper.asm
 
 import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.ClassNode
-import org.objectweb.asm.tree.MethodNode
-import org.spectral.asm.util.newIdentityHashSet
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
 
@@ -21,6 +19,9 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
         type = Type.getObjectType(name)
         node.methods.forEach { methods[it.name + it.desc] = Method(group, this, it) }
         node.fields.forEach { fields[it.name + it.desc] = Field(group, this, it) }
+        if(node.signature != null) {
+            signature = Signature.ClassSignature.parse(node.signature, group)
+        }
     }
 
     /**
@@ -75,6 +76,10 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
     val fieldTypeRefs = newIdentityHashSet<Field>()
 
     val strings = newIdentityHashSet<String>()
+
+    var signature: Signature.ClassSignature? = null
+
+    override val isStatic = false
 
     /**
      * Gets a [Method] object given the name and descriptor within

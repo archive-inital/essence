@@ -4,7 +4,9 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.validate
 import com.github.ajalt.clikt.parameters.types.file
-import org.spectral.asm.ClassEnvironment
+import me.tongfei.progressbar.ProgressBarBuilder
+import me.tongfei.progressbar.ProgressBarStyle
+import org.spectral.mapper.asm.ClassEnvironment
 import org.tinylog.kotlin.Logger
 
 /**
@@ -37,19 +39,29 @@ class MapperCommand : CliktCommand(
      * Run the command logic.
      */
     override fun run() {
-        Logger.info("Building class environment.")
+        Logger.info("Building class environment...")
 
         /*
          * Create the class environment from both JAR files.
          */
         val env = ClassEnvironment.init(jarFileA, jarFileB)
 
-        Logger.info("Preparing to run mapper.")
+        Logger.info("Running mapper...")
+
+        /*
+         * Build progress bar.
+         */
+        val progress = ProgressBarBuilder()
+            .setTaskName("Mapping")
+            .setUpdateIntervalMillis(250)
+            .setUnit(" checks", 1L)
+            .setStyle(ProgressBarStyle.ASCII)
+            .build()
 
         /*
          * Create mapper instance.
          */
-        val mapper = Mapper(env)
+        val mapper = Mapper(env, progress)
         mapper.run()
     }
 }

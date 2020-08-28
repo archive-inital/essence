@@ -1,4 +1,4 @@
-package org.spectral.asm.util
+package org.spectral.mapper.asm
 
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
@@ -7,7 +7,6 @@ import org.objectweb.asm.tree.analysis.Analyzer
 import org.objectweb.asm.tree.analysis.Frame
 import org.objectweb.asm.tree.analysis.SourceInterpreter
 import org.objectweb.asm.tree.analysis.SourceValue
-import org.spectral.asm.Field
 import java.util.*
 
 /**

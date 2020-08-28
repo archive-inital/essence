@@ -1,18 +1,26 @@
 package org.spectral.mapper
 
-import org.spectral.asm.*
-import org.spectral.asm.util.newIdentityHashSet
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import me.tongfei.progressbar.ProgressBar
 import org.spectral.mapper.classifier.*
+import org.spectral.mapper.asm.*
 import org.spectral.mapper.util.CompareUtil
 import org.tinylog.kotlin.Logger
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.sqrt
 
 /**
  * The Spectral Client Mapper Main object
  */
-class Mapper(val env: ClassEnvironment) {
+class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = null) {
+
+    private val availableThreads = Runtime.getRuntime().availableProcessors()
+    private val dispatcher = Executors.newWorkStealingPool(availableThreads - 2).asCoroutineDispatcher()
 
     /**
      * Initialize the classifiers.
@@ -86,6 +94,9 @@ class Mapper(val env: ClassEnvironment) {
         val classes = env.groupA.filter { it.real && !it.hasMatch() }
         val cmpClasses = env.groupB.filter { it.real && !it.hasMatch() }
 
+        progress?.maxHint(classes.size.toLong())
+        progress?.stepTo(0L)
+
         val maxScore = ClassClassifier.getMaxScore(level)
         val maxMismatch = maxScore - calculateInverseScore(ABSOLUTE_MATCH_THRESHOLD * (1 - RELATIVE_MATCH_THRESHOLD), maxScore)
         val matches = ConcurrentHashMap<Class, Class>()
@@ -93,7 +104,7 @@ class Mapper(val env: ClassEnvironment) {
         /*
          * Match recursively
          */
-        classes.forEach { src ->
+        runParallel(classes) { src ->
             val ranking = ClassClassifier.rank(src, cmpClasses, level, maxMismatch)
 
             if(ranking.isValid(maxScore)) {
@@ -124,9 +135,10 @@ class Mapper(val env: ClassEnvironment) {
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
-            { it.methods.values.filter { it.real && it.isStatic } },
+            { it.methods.values.filter { it.real } },
             MethodClassifier,
             MethodClassifier.getMaxScore(level),
+            true,
             totalUnmatched
         )
 
@@ -151,9 +163,10 @@ class Mapper(val env: ClassEnvironment) {
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
-            { it.methods.values.filter { it.real && !it.isStatic } },
+            { it.methods.values.filter { it.real } },
             MethodClassifier,
             MethodClassifier.getMaxScore(level),
+            false,
             totalUnmatched
         )
 
@@ -172,9 +185,10 @@ class Mapper(val env: ClassEnvironment) {
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
-            { it.fields.values.filter { it.isStatic } },
+            { it.fields.values.toList() },
             FieldClassifier,
             FieldClassifier.getMaxScore(level),
+            true,
             totalUnmatched
         )
 
@@ -193,9 +207,10 @@ class Mapper(val env: ClassEnvironment) {
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
-            { it.fields.values.filter { !it.isStatic } },
+            { it.fields.values.toList() },
             FieldClassifier,
             FieldClassifier.getMaxScore(level),
+            false,
             totalUnmatched
         )
 
@@ -223,21 +238,36 @@ class Mapper(val env: ClassEnvironment) {
         elementResolver: (Class) -> List<T>,
         classifier: Classifier<T>,
         maxScore: Double,
+        isStatic: Boolean,
         totalUnmatched: AtomicInteger,
         maxMismatch: Double? = null
     ): Map<T, T> {
-        val classes = env.groupA.filter { it.real }
+        val classesA = env.groupA.filter { it.real }
+        val classesB = env.groupB.filter { it.real }
 
         val maxMismatchValue = maxMismatch ?: maxScore - calculateInverseScore(ABSOLUTE_MATCH_THRESHOLD * (1 - RELATIVE_MATCH_THRESHOLD), maxScore)
         val results = ConcurrentHashMap<T, T>()
 
-        val dsts = mutableListOf<T>()
-        env.groupB.forEach { dsts.addAll(elementResolver(it)) }
 
-        classes.forEach { cls ->
+        runParallel(classesA) { clsA ->
+            if(!clsA.hasMatch() && !isStatic) return@runParallel
+
             var unmatched = 0
 
-            for(element in elementResolver(cls)) {
+            val srcs = mutableListOf<T>()
+            val dsts = mutableListOf<T>()
+
+            if(!isStatic) {
+                srcs.addAll(elementResolver(clsA).filter { !it.hasMatch() && !it.isStatic })
+                dsts.addAll(elementResolver(clsA.match!!).filter { !it.hasMatch() && !it.isStatic })
+            } else {
+                srcs.addAll(elementResolver(clsA).filter { !it.hasMatch() && it.isStatic })
+                classesB.forEach { clsB ->
+                    dsts.addAll(elementResolver(clsB).filter { !it.hasMatch() && it.isStatic })
+                }
+            }
+
+            for(element in srcs) {
                 if(element.hasMatch()) continue
 
                 val ranking = classifier.rank(element, dsts, level, maxMismatchValue)
@@ -255,6 +285,40 @@ class Mapper(val env: ClassEnvironment) {
         results.resolveConflicts()
 
         return results
+    }
+
+    /**
+     * Runs a [action] for each element in [sources] in parallel inside
+     * of a work stealing thread pool dispatcher using kotlin coroutines.
+     *
+     * @param sources Collection<T>
+     * @param action Function1<T, Unit>
+     */
+    private fun <T> runParallel(sources: Collection<T>, action: (T) -> Unit) {
+        progress?.maxHint(sources.size.toLong())
+        progress?.stepTo(0L)
+
+        runBlocking {
+
+            val jobs = mutableListOf<Deferred<Unit>>()
+
+            val producer = flow {
+                sources.forEach { emit(it) }
+            }
+
+            /*
+             * Run the coroutine in parallel
+             */
+            producer.buffer(100000).collect {
+                async(dispatcher) {
+                    action(it)
+                    progress?.step()
+                    return@async
+                }.also { job -> jobs.add(job) }
+            }
+
+            jobs.awaitAll()
+        }
     }
 
     private fun <T> ConcurrentHashMap<T, T>.resolveConflicts() {

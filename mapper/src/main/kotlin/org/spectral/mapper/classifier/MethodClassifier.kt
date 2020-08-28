@@ -1,7 +1,7 @@
 package org.spectral.mapper.classifier
 
 import org.objectweb.asm.Opcodes.*
-import org.spectral.asm.Method
+import org.spectral.mapper.asm.Method
 import org.spectral.mapper.util.CompareUtil
 import org.spectral.mapper.util.RankUtil
 import org.spectral.mapper.util.extractStrings
