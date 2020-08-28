@@ -87,8 +87,10 @@ class OpaquePredicateCheckRemover : Transformer {
              * Export the garbage values to a json data file.
              */
 
-            val file = File(EXPORT_FILE)
+            val file = exportFile!!
             if(file.exists()) file.delete()
+
+            file.parentFile.mkdirs()
 
             val jsonMapper = jacksonObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
             jsonMapper.writeValue(file, opaqueValues)
@@ -220,9 +222,5 @@ class OpaquePredicateCheckRemover : Transformer {
     private fun dropLastArg(desc: String): String {
         val type = Type.getMethodType(desc)
         return Type.getMethodDescriptor(type.returnType, *type.argumentTypes.copyOf(type.argumentTypes.size - 1))
-    }
-
-    companion object {
-        private const val EXPORT_FILE = "opaque_values.json"
     }
 }
