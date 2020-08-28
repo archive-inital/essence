@@ -3,10 +3,13 @@ package org.spectral.mapper
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.validate
+import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import me.tongfei.progressbar.ProgressBarBuilder
 import me.tongfei.progressbar.ProgressBarStyle
 import org.spectral.mapper.asm.ClassEnvironment
+import org.spectral.mapping.io.MappingsWriter
+import org.spectral.mapping.io.loadOpaqueValues
 import org.tinylog.kotlin.Logger
 
 /**
@@ -34,6 +37,12 @@ class MapperCommand : CliktCommand(
     private val jarFileB by argument(name = "Target Jar File", help = "The file path to the target jar file.")
         .file(mustExist = true, canBeDir = false)
         .validate { it.extension == ".jar" }
+
+    private val exportMappingsDir by option("-e", "--export", help = "The directory to export the mappings to")
+        .file(mustExist = false, canBeDir = true)
+
+    private val opaquesFile by option("-o", "--opaques", help = "The opaque predicates json file.")
+        .file(mustExist = false, canBeDir = false)
 
     /**
      * Run the command logic.
@@ -63,5 +72,21 @@ class MapperCommand : CliktCommand(
          */
         val mapper = Mapper(env, progress)
         mapper.run()
+
+        /*
+         * If the export directory is specified, build the mappings.
+         */
+        if(exportMappingsDir != null) {
+            val mappings = MappingBuilder.buildMappings(mapper.env.groupA.toCollection())
+
+            /*
+             * If the opaques file was specified, load the opaque predicate values.
+             */
+            if(opaquesFile != null) {
+                mappings.loadOpaqueValues(opaquesFile!!)
+            }
+
+            MappingsWriter(mappings).write(exportMappingsDir!!)
+        }
     }
 }

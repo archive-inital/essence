@@ -34,6 +34,10 @@ class ClassGroup(val env: ClassEnvironment? = null) {
         extractor.process()
     }
 
+    fun toCollection(): Collection<Class> {
+        return classes.values
+    }
+
     /**
      * Adds a [Class] object to the class group.
      *
