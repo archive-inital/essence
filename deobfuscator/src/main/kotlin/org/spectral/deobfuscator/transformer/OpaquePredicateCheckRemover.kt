@@ -22,6 +22,7 @@ import java.util.*
 class OpaquePredicateCheckRemover : Transformer {
 
     internal var exportOpaques: Boolean = false
+    internal var exportFile: File? = null
 
     override fun transform(group: ClassGroupExt) {
         var counter = 0

@@ -66,7 +66,7 @@ class Deobfuscator {
      * @param clean Whether to skip the name generator transformer.
      * @param consumer Function0<Unit>
      */
-    fun run(clean: Boolean = false, exportOpaques: Boolean = false, consumer: () -> Unit) {
+    fun run(clean: Boolean = false, exportOpaques: File? = null, consumer: () -> Unit) {
         /*
          * Apply each transformer
          */
@@ -77,8 +77,9 @@ class Deobfuscator {
                 return@forEach
             }
 
-            if(exportOpaques && transformer is OpaquePredicateCheckRemover) {
+            if(exportOpaques != null && transformer is OpaquePredicateCheckRemover) {
                 transformer.exportOpaques = true
+                transformer.exportFile = exportOpaques
             }
 
             consumer()
@@ -107,7 +108,8 @@ class Deobfuscator {
             private val outputFile by argument(name = "output file", help = "The output JAR file to export to.").file(mustExist = false, canBeDir = false)
 
             private val clean by option("-c", "--clean", help = "Disables the name generator transformer.").flag(default = false)
-            private val exportOpaques by option("-o", "--opaques", help = "Enables the export of opaque predicate values.").flag(default = false)
+            private val exportOpaques by option("-o", "--opaques", help = "Enables the export of opaque predicate values.")
+                .file(mustExist = false, canBeDir = false)
 
 
             private inline fun <R> ProgressBar.run(block: (ProgressBar) -> R): R {
