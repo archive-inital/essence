@@ -73,14 +73,20 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
     lateinit var type: Type
 
     val methods = ConcurrentHashMap<String, Method>()
+
     val methodsIdx = ArrayList<String>()
 
     val fields = ConcurrentHashMap<String, Field>()
+
     val fieldsIdx = ArrayList<String>()
 
     val methodTypeRefs = newIdentityHashSet<Method>()
 
     val fieldTypeRefs = newIdentityHashSet<Field>()
+
+    var outerClass: Class? = null
+
+    val innerClasses = newIdentityHashSet<Class>()
 
     val strings = newIdentityHashSet<String>()
 

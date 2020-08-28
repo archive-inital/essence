@@ -28,6 +28,8 @@ object ClassClassifier : Classifier<Class>() {
         register(childClasses, 3)
         register(interfaces, 3)
         register(implementers, 2)
+        register(outerClass, 6)
+        register(innerClasses, 5)
         register(methodCount, 3)
         register(fieldCount, 3)
         register(hierarchySiblings, 2)
@@ -109,6 +111,26 @@ object ClassClassifier : Classifier<Class>() {
 
     private val implementers = classifier("implementers") { a, b ->
         return@classifier CompareUtil.compareClassSets(a.implementers, b.implementers)
+    }
+
+    private val outerClass = classifier("outer class") { a, b ->
+        val outerA = a.outerClass
+        val outerB = b.outerClass
+
+        if(outerA == null && outerB == null) return@classifier 1.0
+        if(outerA == null || outerB == null) return@classifier 0.0
+
+        return@classifier if(CompareUtil.isPotentiallyEqual(outerA, outerB)) 1.0 else 0.0
+    }
+
+    private val innerClasses = classifier("inner classes") { a, b ->
+        val innerA = a.innerClasses
+        val innerB = b.innerClasses
+
+        if(innerA.isEmpty() && innerB.isEmpty()) return@classifier 1.0
+        if(innerA.isEmpty() || innerB.isEmpty()) return@classifier 0.0
+
+        return@classifier CompareUtil.compareClassSets(innerA, innerB)
     }
 
     private val methodCount = classifier("method count") { a, b ->

@@ -1,10 +1,7 @@
 package org.spectral.mapper.asm
 
 import org.objectweb.asm.Opcodes.*
-import org.objectweb.asm.tree.FieldInsnNode
-import org.objectweb.asm.tree.InvokeDynamicInsnNode
-import org.objectweb.asm.tree.MethodInsnNode
-import org.objectweb.asm.tree.TypeInsnNode
+import org.objectweb.asm.tree.*
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
 import java.util.stream.Collectors
@@ -82,6 +79,8 @@ class FeatureExtractor(private val group: ClassGroup) {
         cls.fields.values.forEach { f ->
             f.typeClass = f.group.getOrCreate(f.type.className)
         }
+
+        if(cls.outerClass == null) detectOuterClass(cls, cls.node)
     }
 
     /**
@@ -292,5 +291,44 @@ class FeatureExtractor(private val group: ClassGroup) {
 
     private fun Method.isHierarchyBarrier(): Boolean {
         return (this.access and (ACC_PRIVATE or ACC_STATIC)) != 0
+    }
+
+    private fun detectOuterClass(cls: Class, node: ClassNode) {
+        if(node.outerClass != null) {
+            addOuterClass(cls, node.outerClass, true)
+        } else if(node.outerMethod != null) {
+            throw UnsupportedOperationException()
+        } else {
+            for(icn in node.innerClasses) {
+                if(icn.name == node.name) {
+                    addOuterClass(cls, icn.outerName, true)
+                    return
+                }
+            }
+
+            val pos = node.name.lastIndexOf('$')
+            if(pos > 0 && pos < node.name.length - 1) {
+                /*
+                 * Change true to false if creating inner input classes causes matching
+                 * issues.
+                 */
+                addOuterClass(cls, node.name.substring(0, pos), true)
+            }
+        }
+    }
+
+    private fun addOuterClass(cls: Class, name: String, createUnknown: Boolean) {
+        var outerClass = cls.group[name]
+
+        if(outerClass == null) {
+            if(createUnknown) {
+                outerClass = cls.group.getOrCreate(name)
+            } else {
+                return
+            }
+        }
+
+        cls.outerClass = outerClass
+        outerClass.innerClasses.add(cls)
     }
 }
