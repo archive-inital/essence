@@ -17,10 +17,12 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
         access = node.access
         interfaceNames = node.interfaces
         type = Type.getObjectType(name)
+
         node.methods.forEach { methods[it.name + it.desc] = Method(group, this, it) }
-        node.fields.forEach { fields[it.name + it.desc] = Field(group, this, it) }
-        if(node.signature != null) {
-            signature = Signature.ClassSignature.parse(node.signature, group)
+
+        node.fields.forEachIndexed { index, f ->
+            fields[f.name+f.desc] = Field(group, this, index, f)
+            fieldsIdx.add(index, f.name + f.desc)
         }
     }
 
@@ -70,6 +72,7 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
     val methods = ConcurrentHashMap<String, Method>()
 
     val fields = ConcurrentHashMap<String, Field>()
+    val fieldsIdx = ArrayList<String>()
 
     val methodTypeRefs = newIdentityHashSet<Method>()
 
@@ -117,8 +120,22 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
      */
     fun addMethod(name: String, desc: String, static: Boolean): Method {
         val m = Method(group, this, name, desc, static)
-        group.env?.share(m) ?: methods.put(name+desc, m)
+        methods[name+desc] = m
         return m
+    }
+
+    /**
+     * Adds a virtual field to the class object.
+     *
+     * @param name String
+     * @param desc String
+     * @param static Boolean
+     * @return Field
+     */
+    fun addField(name: String, desc: String, static: Boolean): Field {
+        val f = Field(group, this, fields.size, name, desc, static)
+        fields[name+desc] = f
+        return f
     }
 
     /**

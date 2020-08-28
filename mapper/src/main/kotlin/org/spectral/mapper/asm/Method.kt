@@ -30,9 +30,6 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
         access = node.access
         type = Type.getMethodType(desc)
         instructions = node.instructions
-        if(node.signature != null) {
-            signature = Signature.MethodSignature.parse(node.signature, group)
-        }
     }
 
     /**

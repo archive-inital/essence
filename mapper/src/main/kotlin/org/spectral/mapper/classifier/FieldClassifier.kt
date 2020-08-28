@@ -23,11 +23,12 @@ object FieldClassifier : Classifier<Field>() {
         register(types, 10)
         register(readReferences, 6)
         register(writeReferences, 6)
+        register(position, 3)
         register(initValue, 7)
         register(initStrings, 8)
         register(initCode, 10, ClassifierLevel.SECONDARY, ClassifierLevel.EXTRA, ClassifierLevel.FINAL)
-        //register(readRefsBci, 6, ClassifierLevel.FINAL)
-        //register(writeRefsBci, 6, ClassifierLevel.FINAL)
+        register(readRefsBci, 6, ClassifierLevel.FINAL)
+        register(writeRefsBci, 6, ClassifierLevel.FINAL)
     }
 
     /**
@@ -68,6 +69,10 @@ object FieldClassifier : Classifier<Field>() {
 
     private val writeReferences = classifier("write references") { a, b ->
         return@classifier CompareUtil.compareMethodSets(a.writeRefs, b.writeRefs)
+    }
+
+    private val position = classifier("position") { a, b ->
+        return@classifier CompareUtil.classifyPosition(a, b, { it.index }, { field, i -> field.owner.fields[field.owner.fieldsIdx[i]]!! }, { field -> field.owner.fields.values.toTypedArray() })
     }
 
     private val initValue = classifier("init value") { a, b ->

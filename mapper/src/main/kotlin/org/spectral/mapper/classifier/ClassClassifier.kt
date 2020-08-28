@@ -217,8 +217,8 @@ object ClassClassifier : Classifier<Class>() {
         if(a.methods.isNotEmpty() && b.methods.isNotEmpty()) {
             val maxScore = MethodClassifier.getMaxScore(level)
 
-            a.methods.values.filter { it.real }.forEach { methodA ->
-                val ranking = MethodClassifier.rank(methodA, b.methods.values.toList(), level, Double.POSITIVE_INFINITY)
+            a.methods.values.filter { it.real && !it.isStatic }.forEach { methodA ->
+                val ranking = MethodClassifier.rank(methodA, b.methods.values.filter { it.real && !it.isStatic }.toList(), level, Double.POSITIVE_INFINITY)
                 if(Mapper.isValidRank(ranking, maxScore)) {
                     match += Mapper.calculateScore(ranking[0].score, maxScore)
                 }
@@ -228,16 +228,16 @@ object ClassClassifier : Classifier<Class>() {
         if(a.fields.isNotEmpty() && b.fields.isNotEmpty()) {
             val maxScore = FieldClassifier.getMaxScore(level)
 
-            a.fields.values.forEach { fieldA ->
-                val ranking = FieldClassifier.rank(fieldA, b.fields.values.toList(), level, Double.POSITIVE_INFINITY)
+            a.fields.values.filter { it.real && !it.isStatic }.forEach { fieldA ->
+                val ranking = FieldClassifier.rank(fieldA, b.fields.values.filter { it.real && !it.isStatic }.toList(), level, Double.POSITIVE_INFINITY)
                 if(Mapper.isValidRank(ranking, maxScore)) {
                     match += Mapper.calculateScore(ranking[0].score, maxScore)
                 }
             }
         }
 
-        val methodCount = max(a.methods.values.filter { it.real }.size, b.methods.values.filter { it.real }.size)
-        val fieldCount = max(a.fields.size, b.fields.size)
+        val methodCount = max(a.methods.values.filter { it.real && !it.isStatic }.size, b.methods.values.filter { it.real && !it.isStatic }.size)
+        val fieldCount = max(a.fields.values.filter { it.real && !it.isStatic }.size, b.fields.values.filter { it.real && !it.isStatic }.size)
 
         if(methodCount == 0 && fieldCount == 0) {
             return@classifier 1.0
@@ -260,13 +260,12 @@ object ClassClassifier : Classifier<Class>() {
                 continue
             }
 
-            val map = CompareUtil.mapInsns(src, dst)
-            if(map == null) continue
+            val map = CompareUtil.mapInsns(src, dst) ?: continue
 
             val insnsA = src.instructions
             val insnsB = dst.instructions
 
-            for(srcIdx in 0 until map.size) {
+            for(srcIdx in map.indices) {
                 if(map[srcIdx] < 0) continue
 
                 var insn = insnsA[srcIdx]

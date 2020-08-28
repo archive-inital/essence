@@ -119,12 +119,7 @@ class FeatureExtractor(private val group: ClassGroup) {
                  */
                 is FieldInsnNode -> {
                     val owner = group.getOrCreate(insn.owner)
-
-                    /*
-                     * In the future, we should add virtual fields.
-                     * This should increase the matching rate for member elements.
-                     */
-                    val dst = owner.resolveField(insn.name, insn.desc) ?: return
+                    val dst = owner.resolveField(insn.name, insn.desc) ?: owner.addField(insn.name, insn.desc, (insn.opcode == GETSTATIC || insn.opcode == PUTSTATIC))
 
                     /*
                      * Determine if the field instructions is a read or write.
@@ -275,8 +270,11 @@ class FeatureExtractor(private val group: ClassGroup) {
         if(method.owner.parent != null) toCheck.add(method.owner.parent!!)
         toCheck.addAll(method.owner.interfaces)
 
-        var cur: Class? = toCheck.poll()
-        while(cur != null) {
+        var cur: Class?
+        while(true) {
+            cur = toCheck.poll()
+            if(cur == null) break
+
             if(!checked.add(cur)) continue
 
             val m = cur.getMethod(method.name, method.desc)
@@ -287,8 +285,6 @@ class FeatureExtractor(private val group: ClassGroup) {
                 if(cur.parent != null) toCheck.add(cur.parent!!)
                 toCheck.addAll(cur.interfaces)
             }
-
-            cur = toCheck.poll()
         }
 
         checked.clear()

@@ -185,7 +185,7 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
-            { it.fields.values.toList() },
+            { it.fields.values.filter { it.real }.toList() },
             FieldClassifier,
             FieldClassifier.getMaxScore(level),
             true,
@@ -207,7 +207,7 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         val totalUnmatched = AtomicInteger()
         val matches = getMatches(
             level,
-            { it.fields.values.toList() },
+            { it.fields.values.filter{ it.real }.toList() },
             FieldClassifier,
             FieldClassifier.getMaxScore(level),
             false,
@@ -485,10 +485,10 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         val staticMethodTotal = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real && it.isStatic } }.size
         val methodCount = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real && it.hasMatch() } }.size
         val methodTotal = env.groupA.filter { it.real }.flatMap { it.methods.values.filter { it.real } }.size
-        val staticFieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.isStatic && it.hasMatch() } }.size
-        val staticFieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.isStatic } }.size
-        val fieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.hasMatch() } }.size
-        val fieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values }.size
+        val staticFieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.real && it.isStatic && it.hasMatch() } }.size
+        val staticFieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.real && it.isStatic } }.size
+        val fieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.real && it.hasMatch() } }.size
+        val fieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.real } }.size
 
         println("===========================================")
         println("Classes: $classCount / $classTotal (${(classCount.toDouble() / classTotal.toDouble()) * 100.0}%)")

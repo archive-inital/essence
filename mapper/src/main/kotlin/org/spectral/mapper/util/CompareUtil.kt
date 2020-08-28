@@ -6,6 +6,9 @@ import org.objectweb.asm.Type
 import org.objectweb.asm.tree.*
 import org.spectral.mapper.asm.*
 import java.util.*
+import java.util.function.BiFunction
+import java.util.function.Function
+import java.util.function.ToIntFunction
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -746,5 +749,74 @@ object CompareUtil {
             }
         }
         return ret
+    }
+
+    /**
+     * Classifies the relative instruction positions of generic elements
+     *
+     * @param a T
+     * @param b T
+     * @param positionSupplier ToIntFunction<T>
+     * @param siblingSupplier BiFunction<T, Int?, T>
+     * @param siblingsSupplier Function<T, Array<T>>
+     * @return Double
+     */
+    fun <T : Matchable<T>> classifyPosition(
+        a: T, b: T,
+        positionSupplier: (T) -> Int,
+        siblingSupplier: (T, Int) -> T,
+        siblingsSupplier: (T) -> Array<T>
+    ): Double {
+        val posA = positionSupplier(a)
+        val posB = positionSupplier(b)
+        val siblingsA = siblingsSupplier(a)
+        val siblingsB = siblingsSupplier(b)
+        if (posA == posB && siblingsA.size == siblingsB.size) return 1.0
+        if (posA == -1 || posB == -1) return if (posA == posB) 1.0 else 0.0
+
+        // try to find the index range enclosed by other mapped members and compare relative to it
+        var startPosA = 0
+        var startPosB = 0
+        var endPosA = siblingsA.size
+        var endPosB = siblingsB.size
+        if (posA > 0) {
+            for (i in posA - 1 downTo 0) {
+                val c = siblingSupplier(a, i)
+                val match: T? = c.match
+                if (match != null) {
+                    startPosA = i + 1
+                    startPosB = positionSupplier(match) + 1
+                    break
+                }
+            }
+        }
+        if (posA < endPosA - 1) {
+            for (i in posA + 1 until endPosA) {
+                val c = siblingSupplier(a, i)
+                val match: T? = c.match
+                if (match != null) {
+                    endPosA = i
+                    endPosB = positionSupplier(match)
+                    break
+                }
+            }
+        }
+        if (startPosB >= endPosB || startPosB > posB || endPosB <= posB) {
+            startPosB = 0
+            startPosA = startPosB
+            endPosA = siblingsA.size
+            endPosB = siblingsB.size
+        }
+        val relPosA = getRelativePosition(posA - startPosA, endPosA - startPosA)
+        assert(relPosA in 0.0..1.0)
+        val relPosB = getRelativePosition(posB - startPosB, endPosB - startPosB)
+        assert(relPosB in 0.0..1.0)
+        return 1 - abs(relPosA - relPosB)
+    }
+
+    private fun getRelativePosition(position: Int, size: Int): Double {
+        if (size == 1) return 0.5
+        assert(size > 1)
+        return position.toDouble() / (size - 1)
     }
 }

@@ -3,10 +3,8 @@ package org.spectral.mapper.asm
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.*
-import org.objectweb.asm.tree.analysis.Analyzer
-import org.objectweb.asm.tree.analysis.Frame
-import org.objectweb.asm.tree.analysis.SourceInterpreter
-import org.objectweb.asm.tree.analysis.SourceValue
+import org.objectweb.asm.tree.analysis.*
+import org.objectweb.asm.tree.analysis.Interpreter
 import java.util.*
 
 /**
@@ -20,129 +18,134 @@ object Interpreter {
      * @param field Field
      * @return List<AbstractInsnNode>
      */
-    fun extractInitializer(field: Field): List<AbstractInsnNode> {
-        if(field.type.isPrimitive) return listOf()
+    open fun extractInitializer(field: Field): List<AbstractInsnNode> {
+        if (field.type.isPrimitive) return emptyList()
+        val method: Method = field.writeRefs.iterator().next()
+        val asmNode: MethodNode = method.node
+        val il = asmNode.instructions
+        var fieldWrite: AbstractInsnNode? = null
 
-        val results = mutableListOf<AbstractInsnNode>()
-
-        val method = field.writeRefs.iterator().next()
-        val insns = method.instructions
-
-        var initializerInsn: AbstractInsnNode? = null
-
-        val it = insns.iterator()
-        while(it.hasNext()) {
-            val insn = it.next()
-
-            if(insn.opcode == Opcodes.PUTFIELD || insn.opcode == Opcodes.PUTSTATIC) {
-                val fieldInsn = insn as FieldInsnNode
-                val cls = field.group[fieldInsn.owner]
-
-                if(fieldInsn.name == field.name
-                    && fieldInsn.desc == field.desc
-                    && (fieldInsn.owner == field.owner.name || cls?.resolveField(fieldInsn.name, fieldInsn.desc) == field)) {
-                    initializerInsn = fieldInsn
+        //dump(method.asmNode);
+        //System.out.println("\n------------------------\n");
+        val it: Iterator<AbstractInsnNode> = il.iterator()
+        while (it.hasNext()) {
+            val aInsn = it.next()
+            if (aInsn.opcode == Opcodes.PUTFIELD || aInsn.opcode == Opcodes.PUTSTATIC) {
+                val insn = aInsn as FieldInsnNode
+                var cls: Class
+                if (insn.name == field.name && insn.desc == field.desc && (insn.owner == field.owner.name || field.group[insn.owner]
+                        .also { cls = it!! } != null && cls.resolveField(insn.name, insn.desc) === field)
+                ) {
+                    fieldWrite = insn
                     break
                 }
             }
         }
-
-        if(initializerInsn == null) {
-            return emptyList()
+        val interpreter: Interpreter<SourceValue> = SourceInterpreter()
+        val analyzer = Analyzer(interpreter)
+        val frames: Array<Frame<SourceValue>>
+        try {
+            frames = analyzer.analyze(method.owner.name, asmNode)
+            if (frames.size != asmNode.instructions.size()) throw RuntimeException("invalid frame count")
+        } catch (e: AnalyzerException) {
+            throw RuntimeException(e)
         }
-
-        /*
-         * Interpret the initial value for the field.
-         */
-        val interpreter = SourceInterpreter()
-        val analyzer = Analyzer<SourceValue>(interpreter)
-        val frames = analyzer.analyze(method.owner.name, method.node)
-
-        val simulatedPositions = BitSet(insns.size())
-        val simulateQueue = ArrayDeque<AbstractInsnNode>()
-
-        simulatedPositions.set(insns.indexOf(initializerInsn))
-        simulateQueue.add(initializerInsn)
-
-        var current: AbstractInsnNode? = simulateQueue.poll()
-        while(current != null) {
-            val pos = insns.indexOf(current)
+        val tracedPositions = BitSet(il.size())
+        val positionsToTrace: Queue<AbstractInsnNode> = ArrayDeque()
+        tracedPositions.set(il.indexOf(fieldWrite))
+        positionsToTrace.add(fieldWrite)
+        var insn: AbstractInsnNode?
+        while (positionsToTrace.poll().also { insn = it } != null) {
+            val pos = il.indexOf(insn)
             val frame = frames[pos]
-
-            /*
-             * Get the resulting stack from the simulation.
-             */
-            val stackResult = simulate(current, frame)
-
-            for(i in 0 until stackResult) {
+            val stackConsumed: Int = simulate(insn!!, frame)
+            for (i in 0 until stackConsumed) {
                 val value = frame.getStack(frame.stackSize - i - 1)
-
-                for(insn2 in value.insns) {
-                    val pos2 = insns.indexOf(insn2)
-                    if(simulatedPositions.get(pos2)) continue
-                    simulatedPositions.set(pos2)
-                    simulateQueue.add(insn2)
+                for (in2 in value.insns) {
+                    val pos2 = il.indexOf(in2)
+                    if (tracedPositions[pos2]) continue
+                    tracedPositions.set(pos2)
+                    positionsToTrace.add(in2)
                 }
             }
-
-            /*
-             * Keep Track of Var instructions
-             * NEW instructions, and INVOKESPECIAL instructions.
-             */
-            if(current.type == AbstractInsnNode.VAR_INSN && current.opcode >= Opcodes.ILOAD && current.opcode <= Opcodes.ALOAD) {
-                val ainsn = current as VarInsnNode
-                val value = frame.getLocal(ainsn.`var`)
-
-                for(insn2 in value.insns) {
-                    val pos2 = insns.indexOf(insn2)
-                    if(simulatedPositions.get(pos2)) continue
-                    simulatedPositions.set(pos2)
-                    simulateQueue.add(insn2)
+            if (insn!!.type == AbstractInsnNode.VAR_INSN && insn!!.opcode >= Opcodes.ILOAD && insn!!.opcode <= Opcodes.ALOAD) {
+                val vin = insn as VarInsnNode
+                val value = frame.getLocal(vin.`var`)
+                for (in2 in value.insns) {
+                    val pos2 = il.indexOf(in2)
+                    if (tracedPositions[pos2]) continue
+                    tracedPositions.set(pos2)
+                    positionsToTrace.add(in2)
                 }
-            }
-            else if(current.opcode == Opcodes.NEW) {
-                val ainsn = current as TypeInsnNode
-
-                val it2 = insns.iterator(pos + 1)
-                while(it2.hasNext()) {
-                    val ain = it2.next()
-
-                    if(ain.opcode == Opcodes.INVOKESPECIAL) {
+            } else if (insn!!.opcode == Opcodes.NEW) { // ensure we track the constructor call when running across a NEW insn
+                val tin = insn as TypeInsnNode
+                val itA: Iterator<AbstractInsnNode> = il.iterator(pos + 1)
+                while (itA.hasNext()) {
+                    val ain = itA.next()
+                    if (ain.opcode == Opcodes.INVOKESPECIAL) {
                         val in2 = ain as MethodInsnNode
-
-                        if(in2.name == "<init>" && in2.owner == ainsn.desc) {
-                            val pos2 = insns.indexOf(in2)
-
-                            if(!simulatedPositions.get(pos2)) {
-                                simulatedPositions.set(pos2)
-                                simulateQueue.add(in2)
+                        if (in2.name == "<init>" && in2.owner == tin.desc) {
+                            val pos2 = il.indexOf(in2)
+                            if (!tracedPositions[pos2]) {
+                                tracedPositions.set(pos2)
+                                positionsToTrace.add(in2)
                             }
-
                             break
                         }
                     }
                 }
             }
-
-            current = simulateQueue.poll()
         }
 
-        /*
-         * Calculate and add the field initializers to a list.
-         */
+        //Textifier textifier = new Textifier();
+        //MethodVisitor visitor = new TraceMethodVisitor(textifier);
+        val initIl: MutableList<AbstractInsnNode> = ArrayList(tracedPositions.cardinality())
+        var pos = 0
+        while (tracedPositions.nextSetBit(pos).also { pos = it } != -1) {
+            insn = il[pos]
+            initIl.add(insn!!)
 
-        val initializerInsns = mutableListOf<AbstractInsnNode>()
-        var initPos = 0
+            /*System.out.print(pos+": ");
 
-        while(simulatedPositions.nextSetBit(initPos) != -1) {
-            current = insns.get(initPos)
-            initializerInsns.add(current)
-            initPos++
+			il.get(pos).accept(visitor);
+			System.out.print(textifier.getText().get(0));
+			textifier.getText().clear();*/pos++
         }
+        field.initializer.addAll(initIl)
 
-        results.addAll(initializerInsns)
+        /*		int pos = fieldWritePos;
 
-        return results
+		for (int i = 0; i < 100; i++) {
+			System.out.println(i+" ("+pos+"):");
+
+			Frame<SourceValue> frame = frames[pos];
+			Frame<SourceValue> nextFrame = frames[pos + 1];
+
+			int stackConsumed = frame.getStackSize() - nextFrame.getStackSize();
+
+			SourceValue value = frame.getStack(frame.getStackSize() - 1);
+
+			if (value.insns.isEmpty()) {
+				System.out.println("empty");
+				break;
+			}
+
+			for (AbstractInsnNode ain : value.insns) {
+				ain.accept(visitor);
+				System.out.print(textifier.getText().get(0));
+				textifier.getText().clear();
+			}
+
+			pos = method.asmNode.instructions.indexOf(value.insns.iterator().next());
+		}*/
+
+        /*System.out.println(frame);
+		System.out.println("\n------------------------\n");
+
+		dump(frame.getStack(frame.getStackSize() - 1).insns);*/
+        //System.out.println();
+
+        return initIl
     }
 
     /**
@@ -247,6 +250,8 @@ object Interpreter {
     }
 
     val Type.isPrimitive: Boolean get() {
-        return this.sort != Type.OBJECT || this.sort != Type.ARRAY
+        val id = this.descriptor
+        val start = id[0]
+        return start != 'L' && start != '['
     }
 }
