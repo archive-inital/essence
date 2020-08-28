@@ -4,6 +4,7 @@ import org.objectweb.asm.Handle
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.*
+import org.spectral.mapper.MappingCache
 import org.spectral.mapper.asm.*
 import java.util.*
 import java.util.function.BiFunction
@@ -20,6 +21,11 @@ import kotlin.math.min
  * given elements are potential match candidates.
  */
 object CompareUtil {
+
+    /**
+     * The Instruction indexes cache token.
+     */
+    private val INSNS_CACHE_TOKEN = MappingCache.CacheToken<IntArray>()
 
     fun isPotentiallyEqual(a: Class, b: Class): Boolean {
         if(a == b) return true
@@ -623,7 +629,12 @@ object CompareUtil {
          * build some sort of cache system to leave the mapped source instructions
          * in for each iteration that way we do not need to compute each pass's mapped indexes.
          */
-        return mapInsns(insnsA, insnsB, a, b)
+
+        return if(insnsA.size() * insnsB.size() < 1000) {
+            mapInsns(insnsA, insnsB, a, b)
+        } else {
+            MappingCache.compute(INSNS_CACHE_TOKEN, a, b, { methodA: Method, methodB: Method -> mapInsns(methodA.instructions, methodB.instructions, methodA, methodB) } )
+        }
     }
 
     /**

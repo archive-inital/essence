@@ -18,7 +18,10 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
         interfaceNames = node.interfaces
         type = Type.getObjectType(name)
 
-        node.methods.forEach { methods[it.name + it.desc] = Method(group, this, it) }
+        node.methods.forEachIndexed { index, m ->
+            methods[m.name+m.desc] = Method(group, this, index, m)
+            methodsIdx.add(index, m.name+m.desc)
+        }
 
         node.fields.forEachIndexed { index, f ->
             fields[f.name+f.desc] = Field(group, this, index, f)
@@ -70,6 +73,7 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
     lateinit var type: Type
 
     val methods = ConcurrentHashMap<String, Method>()
+    val methodsIdx = ArrayList<String>()
 
     val fields = ConcurrentHashMap<String, Field>()
     val fieldsIdx = ArrayList<String>()
@@ -119,8 +123,9 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
      * @return Method
      */
     fun addMethod(name: String, desc: String, static: Boolean): Method {
-        val m = Method(group, this, name, desc, static)
+        val m = Method(group, this, methods.size - 1, name, desc, static)
         methods[name+desc] = m
+        methodsIdx.add(methods.size - 1, name+desc)
         return m
     }
 
@@ -133,8 +138,9 @@ class Class private constructor(val group: ClassGroup, val node: ClassNode, val 
      * @return Field
      */
     fun addField(name: String, desc: String, static: Boolean): Field {
-        val f = Field(group, this, fields.size, name, desc, static)
+        val f = Field(group, this, fields.size - 1, name, desc, static)
         fields[name+desc] = f
+        fieldsIdx.add(fields.size - 1, name+desc)
         return f
     }
 

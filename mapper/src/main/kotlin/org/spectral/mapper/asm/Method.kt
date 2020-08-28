@@ -19,7 +19,7 @@ import java.lang.reflect.Modifier
  * @property real Boolean
  * @constructor
  */
-class Method private constructor(val group: ClassGroup, val owner: Class, val node: MethodNode, val real: Boolean) : Matchable<Method>() {
+class Method private constructor(val group: ClassGroup, val owner: Class, val index: Int, val node: MethodNode, val real: Boolean) : Matchable<Method>() {
 
     /**
      * Initializes the ASM fields after the constructor.
@@ -40,7 +40,7 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
      * @param node MethodNode
      * @constructor
      */
-    constructor(group: ClassGroup, owner: Class, node: MethodNode) : this(group, owner, node, true) {
+    constructor(group: ClassGroup, owner: Class, index: Int, node: MethodNode) : this(group, owner, index, node, true) {
         this.init()
     }
 
@@ -52,7 +52,7 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val no
      * @param name String
      * @constructor
      */
-    constructor(group: ClassGroup, owner: Class, name: String, desc: String, static: Boolean) : this(group, owner, MethodNode(ASM8), false) {
+    constructor(group: ClassGroup, owner: Class, index: Int, name: String, desc: String, static: Boolean) : this(group, owner, index, MethodNode(ASM8), false) {
         this.node.name = name
         this.node.desc = desc
         this.node.access = if(static) this.node.access and ACC_STATIC else this.node.access

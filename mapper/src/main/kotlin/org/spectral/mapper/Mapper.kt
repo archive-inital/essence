@@ -419,6 +419,8 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
                 }
             }
         }
+
+        MappingCache.clear()
     }
 
     /**
@@ -456,6 +458,8 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
                 }
             }
         }
+
+        MappingCache.clear()
     }
 
     /**
@@ -472,6 +476,8 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
 
         a.match = b
         b.match = a
+
+        MappingCache.clear()
     }
 
     ///////////////////////////////////////////////////
