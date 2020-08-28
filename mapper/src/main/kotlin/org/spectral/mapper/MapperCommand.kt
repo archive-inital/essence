@@ -2,65 +2,66 @@ package org.spectral.mapper
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.arguments.validate
 import com.github.ajalt.clikt.parameters.types.file
-import org.spectral.mapping.io.MappingsWriter
-import org.spectral.mapping.io.loadOpaqueValues
+import me.tongfei.progressbar.ProgressBarBuilder
+import me.tongfei.progressbar.ProgressBarStyle
+import org.spectral.mapper.asm.ClassEnvironment
 import org.tinylog.kotlin.Logger
 
 /**
- * The Console or CLI usage of the program.
+ * The Mapper CLI console command used to start and set
+ * flags for the mapper program.
  */
 class MapperCommand : CliktCommand(
     name = "Mapper",
-    help = "Maps obfuscation names between versions or obfuscation iterations."
+    help = "Generates mappings between two JAR file obfuscations by similarity scoring.",
+    printHelpOnEmptyArgs = true,
+    invokeWithoutSubcommand = true
 ) {
 
-    private val mappedJarFile by argument(name = "Mapped Jar", help = "The path to the old JAR file").file(mustExist = true, canBeDir = false)
-    private val targetJarFile by argument(name = "Target Jar", help = "The path to the new JAR file").file(mustExist = true, canBeDir = false)
-
-    private val exportDir by option("-e", "--export", help = "Export mappings directory path").file(mustExist = false, canBeDir = true)
-    private val opaqueValuesFile by option("-o", "--opaques", help = "The opaque values JSON file to load mappings with").file(mustExist = false, canBeDir = false)
+    /**
+     * The JAR file which has been renamed. This is the file that will be used
+     * and mapped to [jarFileB]
+     */
+    private val jarFileA by argument(name = "Mapped Jar File", help = "The file path to the mapped jar file.")
+        .file(mustExist = true, canBeDir = false)
+        .validate { it.extension == ".jar" }
 
     /**
-     * Executes the command
+     * The target, or the non renamed obfuscated JAR file to generate mappings for.
+     */
+    private val jarFileB by argument(name = "Target Jar File", help = "The file path to the target jar file.")
+        .file(mustExist = true, canBeDir = false)
+        .validate { it.extension == ".jar" }
+
+    /**
+     * Run the command logic.
      */
     override fun run() {
-        Logger.info("Initializing...")
+        Logger.info("Building class environment...")
 
         /*
-         * Build the mapper instance.
+         * Create the class environment from both JAR files.
          */
-        val mapper = Mapper.Builder()
-            .mappedInput(mappedJarFile)
-            .targetInput(targetJarFile)
+        val env = ClassEnvironment.init(jarFileA, jarFileB)
+
+        Logger.info("Running mapper...")
+
+        /*
+         * Build progress bar.
+         */
+        val progress = ProgressBarBuilder()
+            .setTaskName("Mapping")
+            .setUpdateIntervalMillis(250)
+            .setUnit(" checks", 1L)
+            .setStyle(ProgressBarStyle.ASCII)
             .build()
 
         /*
-         * Run the mapper.
+         * Create mapper instance.
          */
+        val mapper = Mapper(env, progress)
         mapper.run()
-
-        /*
-         * If the export directory is specified,
-         * Export the mappings to [exportDir] folder.
-         */
-        if(exportDir != null) {
-            Logger.info("Exporting mappings to folder: '${exportDir!!.path}")
-
-            val mappings = MappingBuilder.buildMappings(mapper.classes!!)
-
-            /*
-             * If the opaque predicate values JSON file is specified,
-             * Update the opaque method values.
-             */
-            if(opaqueValuesFile != null) {
-                mappings.loadOpaqueValues(opaqueValuesFile!!)
-            }
-
-            MappingsWriter(mappings).write(exportDir!!)
-
-            Logger.info("Mappings have finished exporting.")
-        }
     }
 }
