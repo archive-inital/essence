@@ -10,4 +10,5 @@ ext {
     guava = "29.0-jre"
     progressbar = "0.8.1"
     coroutines = "1.3.9"
+    databind = "2.11.2"
 }
