@@ -51,6 +51,8 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         matchRecursively(ClassifierLevel.EXTRA)
         matchRecursively(ClassifierLevel.FINAL)
 
+        progress?.close()
+
         /*
          * Print the matching statistics.
          */

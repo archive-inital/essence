@@ -8,9 +8,11 @@ import com.github.ajalt.clikt.parameters.types.file
 import me.tongfei.progressbar.ProgressBarBuilder
 import me.tongfei.progressbar.ProgressBarStyle
 import org.spectral.mapper.asm.ClassEnvironment
+import org.spectral.mapping.io.MappingsReader
 import org.spectral.mapping.io.MappingsWriter
 import org.spectral.mapping.io.loadOpaqueValues
 import org.tinylog.kotlin.Logger
+import java.io.File
 
 /**
  * The Mapper CLI console command used to start and set
@@ -86,7 +88,13 @@ class MapperCommand : CliktCommand(
                 mappings.loadOpaqueValues(opaquesFile!!)
             }
 
+            Logger.info("Exporting mappings to folder: '${exportMappingsDir!!.path}'.")
+
             MappingsWriter(mappings).write(exportMappingsDir!!)
+
+            Logger.info("Mapping have been successfully exported.")
         }
+
+        Logger.info("Mapper has completed successfully.")
     }
 }
