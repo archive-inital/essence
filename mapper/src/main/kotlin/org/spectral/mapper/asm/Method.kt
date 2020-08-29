@@ -74,9 +74,9 @@ class Method private constructor(val group: ClassGroup, val owner: Class, val in
 
     lateinit var instructions: InsnList
 
-    lateinit var arguments: List<Variable>
+    var arguments: List<Variable> = mutableListOf()
 
-    lateinit var variables: List<Variable>
+    var variables: List<Variable> = mutableListOf()
 
     lateinit var signature: Signature.MethodSignature
 
