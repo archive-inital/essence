@@ -19,7 +19,7 @@ class MappingsReader(val mappings: Mappings = Mappings()) {
      *
      * @param folder File
      */
-    fun readFrom(folder: File) {
+    fun readFrom(folder: File): Mappings {
         if(!folder.isDirectory || !folder.exists()) {
             throw FileNotFoundException()
         }
@@ -37,5 +37,7 @@ class MappingsReader(val mappings: Mappings = Mappings()) {
             val classMapping = Parser.parseMappingFile(contents)
             mappings.classes.add(classMapping)
         }
+
+        return mappings
     }
 }

@@ -1,5 +1,7 @@
 package org.spectral.deobfuscator.transformer.rename
 
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.objectweb.asm.Opcodes.ACC_NATIVE
 import org.objectweb.asm.commons.ClassRemapper
 import org.objectweb.asm.commons.SimpleRemapper
@@ -8,12 +10,15 @@ import org.objectweb.asm.tree.MethodNode
 import org.spectral.deobfuscator.asm.ClassGroupExt
 import org.spectral.deobfuscator.Transformer
 import org.tinylog.kotlin.Logger
+import java.io.File
 import java.util.*
 
 /**
  * Renames all the methods to a more readable format.
  */
 class NameGenerator : Transformer {
+
+    var exportFile: File? = null
 
     private var classCounter = 0
     private var methodCounter = 0
@@ -32,6 +37,16 @@ class NameGenerator : Transformer {
         this.applyMappings(group)
 
         Logger.info("Renamed [classes: $classCounter, methods: $methodCounter, fields: $fieldCounter].")
+
+        if(exportFile != null) {
+            Logger.info("Exporting names to file: '${exportFile!!.path}'.")
+
+            if(exportFile!!.exists()) exportFile!!.delete()
+            exportFile!!.parentFile.mkdirs()
+
+            val jsonMapper = jacksonObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
+            jsonMapper.writeValue(exportFile!!, mappings)
+        }
     }
 
     /**

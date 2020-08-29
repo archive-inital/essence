@@ -34,20 +34,21 @@ class Deobfuscator {
      * Register the transformer instances.
      */
     init {
-        register(UnusedMethodRemover())
-        register(UnusedFieldRemover())
-        register(MultiplierRemover())
-        register(ControlFlowFixer())
         register(FieldInliner())
         register(TryCatchRemover())
-        register(ErrorConstructorRemover())
-        register(GotoRemover())
         register(DeadCodeRemover())
+        register(ControlFlowFixer())
         register(OpaquePredicateCheckRemover())
+        register(UnusedFieldRemover())
+        register(ErrorConstructorRemover())
+        register(UnusedMethodRemover())
+        register(OpaquePredicateArgRemover())
+        register(GotoRemover())
         register(FieldSorter())
         register(MethodSorter())
         register(NameGenerator())
-        register(OpaquePredicateArgRemover())
+        register(ComputeFrames())
+        register(MultiplierRemover())
     }
 
     private fun register(transformer: Transformer) {
@@ -66,7 +67,10 @@ class Deobfuscator {
      * @param clean Whether to skip the name generator transformer.
      * @param consumer Function0<Unit>
      */
-    fun run(clean: Boolean = false, exportOpaques: File? = null, consumer: () -> Unit) {
+    fun run(clean: Boolean = false,
+            exportOpaques: File? = null,
+            exportNames: File? = null,
+            consumer: () -> Unit) {
         /*
          * Apply each transformer
          */
@@ -82,6 +86,10 @@ class Deobfuscator {
                 transformer.exportFile = exportOpaques
             }
 
+            if(exportNames != null && transformer is NameGenerator) {
+                transformer.exportFile = exportNames
+            }
+
             consumer()
             Logger.info("Running bytecode transformer '${transformer::class.simpleName}'...")
             transformer.transform(group)
@@ -90,10 +98,8 @@ class Deobfuscator {
 
     /**
      * Runs the deobfuscation with an empty consumer [Unit] callback.
-     *
-     * @param clean Whether to skip the name generator transformer.
      */
-    fun run(clean: Boolean = false) = this.run {}
+    fun run() = this.run {}
 
     companion object {
         @JvmStatic
@@ -109,6 +115,8 @@ class Deobfuscator {
 
             private val clean by option("-c", "--clean", help = "Disables the name generator transformer.").flag(default = false)
             private val exportOpaques by option("-o", "--opaques", help = "Enables the export of opaque predicate values.")
+                .file(mustExist = false, canBeDir = false)
+            private val exportNames by option("-n", "--names", help = "The file to export name mappings to.")
                 .file(mustExist = false, canBeDir = false)
 
 
@@ -151,7 +159,7 @@ class Deobfuscator {
                     .build()
 
                 progress.run { p ->
-                    deobfuscator.run(clean, exportOpaques) {
+                    deobfuscator.run(clean, exportOpaques, exportNames) {
                         p.step()
                     }
 
