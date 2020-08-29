@@ -29,6 +29,7 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         ClassClassifier.init()
         MethodClassifier.init()
         FieldClassifier.init()
+        VariableClassifier.init()
     }
 
     /**
@@ -50,6 +51,17 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         matchRecursively(ClassifierLevel.SECONDARY)
         matchRecursively(ClassifierLevel.EXTRA)
         matchRecursively(ClassifierLevel.FINAL)
+
+        /*
+         * Match method variables recursively
+         */
+
+        var matchedAny: Boolean
+
+        do {
+            matchedAny = matchVariables(true, { it.arguments }, ClassifierLevel.FINAL)
+            matchedAny = matchedAny or matchVariables(false, { it.variables }, ClassifierLevel.FINAL)
+        } while(matchedAny)
 
         progress?.close()
 
@@ -221,6 +233,65 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         }
 
         Logger.info("Matched ${matches.size} fields (${totalUnmatched.get()} unmatched)")
+
+        return matches.isNotEmpty()
+    }
+
+    /**
+     * Matches method local variables together.
+     *
+     * @param isArg Boolean
+     * @param supplier Function1<Method, List<Variable>>
+     * @param level ClassifierLevel
+     * @return Boolean
+     */
+    fun matchVariables(isArg: Boolean, supplier: (Method) -> List<Variable>, level: ClassifierLevel): Boolean {
+        val methods = env.groupA.filter { it.real && it.methods.size > 0 }
+            .flatMap { it.methods.values }
+            .filter { it.real && it.hasMatch() && supplier(it).size > 0 }
+            .filter {
+                supplier(it).forEach { a ->
+                    if(!a.hasMatch()) return@filter true
+                }
+
+                return@filter false
+            }
+
+        val matches = ConcurrentHashMap<Variable, Variable>()
+        val totalUnmatched = AtomicInteger()
+
+        val maxScore = VariableClassifier.getMaxScore(level)
+        val maxMismatch = maxScore - calculateInverseScore(ABSOLUTE_MATCH_THRESHOLD * (1 - RELATIVE_MATCH_THRESHOLD), maxScore)
+
+        /*
+         * Match the method variables.
+         */
+        runParallel(methods) { m ->
+            var unmatched = 0
+
+            for(variable in supplier(m)) {
+                if(variable.hasMatch()) continue
+
+                val ranking = VariableClassifier.rank(variable, supplier(m.match!!), level, maxMismatch)
+
+                if(ranking.isValid(maxScore)) {
+                    val match = ranking[0].subject
+                    matches[variable] = match
+                } else {
+                    unmatched++
+                }
+            }
+
+            if(unmatched > 0) totalUnmatched.addAndGet(unmatched)
+        }
+
+        matches.resolveConflicts()
+
+        for(entry in matches.entries) {
+            match(entry.key, entry.value)
+        }
+
+        Logger.info("Matched ${matches.size} ${if(isArg) "arguments" else "variables"} (${totalUnmatched.get()} unmatched)")
 
         return matches.isNotEmpty()
     }
@@ -482,6 +553,29 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         MappingCache.clear()
     }
 
+    /**
+     * Matches two [Variable] objects together.
+     *
+     * @param a Variable
+     * @param b Variable
+     */
+    fun match(a: Variable, b: Variable) {
+        if(a.isArg != b.isArg) throw IllegalArgumentException("Variables are not of the same type.")
+        if(a.match == b) return
+        if(a == b) return
+
+        if(a.isArg && b.isArg) {
+            Logger.info("match ARG [$a] -> [$b]")
+        } else {
+            Logger.info("match VAR [$a] -> [$b]")
+        }
+
+        a.match = b
+        b.match = a
+
+        MappingCache.clear()
+    }
+
     ///////////////////////////////////////////////////
     // UTIL METHODS
     ///////////////////////////////////////////////////
@@ -497,6 +591,10 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         val staticFieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.real && it.isStatic } }.size
         val fieldCount = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.real && it.hasMatch() } }.size
         val fieldTotal = env.groupA.filter { it.real }.flatMap { it.fields.values.filter { it.real } }.size
+        val argCount = env.groupA.flatMap { it.methods.values }.flatMap { it.arguments }.filter { it.hasMatch() }.size
+        val argTotal = env.groupA.flatMap { it.methods.values }.flatMap { it.arguments }.size
+        val varCount = env.groupA.flatMap { it.methods.values }.flatMap { it.variables }.filter { it.hasMatch() }.size
+        val varTotal = env.groupA.flatMap { it.methods.values }.flatMap { it.variables }.size
 
         println("===========================================")
         println("Classes: $classCount / $classTotal (${(classCount.toDouble() / classTotal.toDouble()) * 100.0}%)")
@@ -504,6 +602,8 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         println("Methods: $methodCount / $methodTotal (${(methodCount.toDouble() / methodTotal.toDouble()) * 100.0}%)")
         println("Static Fields: $staticFieldCount / $staticFieldTotal (${(staticFieldCount.toDouble() / staticFieldTotal.toDouble()) * 100.0}%)")
         println("Fields: $fieldCount / $fieldTotal (${(fieldCount.toDouble() / fieldTotal.toDouble()) * 100.0}%)")
+        println("Arguments: $argCount / $argTotal (${(argCount.toDouble() / argTotal.toDouble()) * 100.0}%)")
+        println("Variables: $varCount / $varTotal (${(varCount.toDouble() / varTotal.toDouble()) * 100.0}%")
         println("===========================================")
     }
 
