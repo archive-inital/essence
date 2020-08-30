@@ -1,52 +1,54 @@
 package org.spectral.remapper
 
-import com.fasterxml.jackson.databind.SerializationFeature
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import org.objectweb.asm.commons.Remapper
-import org.objectweb.asm.commons.SimpleRemapper
-import org.spectral.mapping.Mappings
-import java.io.File
+import org.tinylog.kotlin.Logger
 
-class AsmRemapper(private val mappings: Mappings, nameMappingFile: File? = null) : Remapper() {
+class AsmRemapper(private val mappings: AsmMappings, private val hierarchyGraph: HierarchyGraph) : Remapper() {
 
-    private var nameMapper: Remapper? = null
-
-    init {
-        if(nameMappingFile != null) {
-            val jsonMapper = jacksonObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
-            val nameMappings = jsonMapper.readValue<Map<String, String>>(nameMappingFile)
-
-            nameMapper = SimpleRemapper(nameMappings)
-        }
-    }
-
-    override fun map(name: String): String {
-        val ret = mappings.classes.firstOrNull { it.obfName == name }
-        if(ret != null) return ret.name
-
-        return if(nameMapper == null) name else nameMapper!!.map(name) ?: name
-    }
-
-    override fun mapFieldName(owner: String, name: String, desc: String): String {
-        val ret = mappings.classes.firstOrNull { it.obfName == owner }
-            ?.fields?.firstOrNull { it.obfName == name && it.obfDesc == desc }
-
-        if(ret != null) return ret.name
-
-        return if(nameMapper == null) name else nameMapper!!.mapFieldName(owner, name, desc)
+    override fun map(internalName: String): String {
+        return mappings.mapClass(internalName)
     }
 
     override fun mapMethodName(owner: String, name: String, desc: String): String {
-        val ret = mappings.classes.firstOrNull { it.obfName == owner }
-            ?.methods?.firstOrNull { it.obfName == name && it.obfDesc == desc }
+        val newName = mappings.mapMethod(owner, name, desc)
 
-        if(ret != null) return ret.name
+        hierarchyGraph.getAllSuperClasses(owner).forEach { superClass ->
+            hierarchyGraph.getHierarchyMethods(superClass).forEach { ref ->
+                if(ref.name == name && methodDescOverride(desc, ref.desc, hierarchyGraph)) {
+                    val inheritedName = mappings.mapMethod(superClass, name, desc)
+                    if(inheritedName != null) {
+                        if(newName != null && inheritedName != newName) {
+                            Logger.warn("Method inheritance problem: $owner.$name$desc inherits $superClass.$name$desc but $newName != $inheritedName")
+                        }
 
-        return if(nameMapper == null) name else nameMapper!!.mapMethodName(owner, name, desc)
+                        return inheritedName
+                    }
+                }
+            }
+        }
+
+        if(newName != null) return newName
+        return name
     }
 
-    private fun isObfuscatedName(name: String): Boolean {
-        return (name.length <= 2 || (name.length == 3 && name.startsWith("aa")))
+    override fun mapFieldName(owner: String, name: String, desc: String): String {
+        val newName = mappings.mapField(owner, name, desc)
+
+        hierarchyGraph.getAllSuperClasses(owner).forEach { superClass ->
+            if(hierarchyGraph.getHierarchyFields(superClass).contains(HierarchyGraph.MemberRef(name, desc))) {
+                val inheritedName = mappings.mapField(superClass, name, desc)
+                if(inheritedName != null) {
+                    if(newName != null && inheritedName != newName) {
+                        Logger.warn("Field inheritance problem: $owner.$name$desc inherits $superClass.$name$desc but $newName != $inheritedName")
+                    }
+
+                    return inheritedName
+                }
+            }
+        }
+
+        if(newName != null) return newName
+        return name
     }
+
 }

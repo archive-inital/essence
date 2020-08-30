@@ -11,6 +11,7 @@ import java.awt.GridLayout
 import java.io.File
 import java.net.URL
 import java.net.URLClassLoader
+import java.util.jar.JarFile
 import javax.swing.JFrame
 
 object Test {
@@ -20,14 +21,12 @@ object Test {
 
         val input = File("gamepack-clean-191.jar")
         val mappings = MappingsReader().readFrom(File("build/gen/mappings/"))
-        val nameMappings = File("build/gen/name_values.json")
         val output = File("gamepack-remapped-191.jar")
 
         val remapper = JarRemapper.Builder()
             .input(input)
             .output(output)
             .mappings(mappings)
-            .nameMappings(nameMappings)
             .build()
 
         remapper.run()
@@ -41,9 +40,10 @@ object Test {
             Logger.info("Starting test client with gamepack JAR: 'gamepack.jar'.")
 
             val params = this.crawlJavConfig()
-            val classloader = URLClassLoader(arrayOf(gamepack.toURI().toURL()))
+            val classloader = URLClassLoader(arrayOf(gamepack.toURI().toURL()), Test::class.java.classLoader)
             val main = params["initial_class"]!!.replace(".class", "")
-            val applet = classloader.loadClass(main).newInstance() as Applet
+            val test = Class.forName("jag.opcode.LoginPacketMeta", true, classloader)
+            val applet = Class.forName(main, true, classloader).newInstance() as Applet
 
             applet.background = Color.BLACK
             applet.preferredSize = Dimension(params["applet_minwidth"]!!.toInt(), params["applet_minheight"]!!.toInt())
