@@ -63,17 +63,6 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         val matcher = Matcher(OldClassEnvironment())
         matcher.init(config, progressConsumer)
 
-
-        val clientClassa = matcher.env.envA.getClsByName("client")
-        val initMethoda = clientClassa.getMethod("init", "()V")
-
-        Analysis.analyzeMethod(initMethoda, Analysis.CommonClasses(matcher.env.envA))
-
-        val clientClassb = matcher.env.envB.getClsByName("client")
-        val initMethodb = clientClassb.getMethod("init", "()V")
-
-        Analysis.analyzeMethod(initMethodb, Analysis.CommonClasses(matcher.env.envB))
-
         matcher.autoMatchAll(progressConsumer)
 
         /*

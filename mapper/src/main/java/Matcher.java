@@ -1,5 +1,6 @@
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Array;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -193,6 +194,7 @@ public class Matcher {
 
 	private static void unmatchMembers(ClassInstance cls) {
 		for (MethodInstance m : cls.getMethods()) {
+			if(m.isStatic) continue;
 			if (m.getMatch() != null) {
 				m.getMatch().setMatch(null);
 				m.setMatch(null);
@@ -202,6 +204,7 @@ public class Matcher {
 		}
 
 		for (FieldInstance m : cls.getFields()) {
+			if(m.isStatic) continue;
 			if (m.getMatch() != null) {
 				m.getMatch().setMatch(null);
 				m.setMatch(null);
@@ -232,7 +235,6 @@ public class Matcher {
 	private void match(MethodInstance a, MethodInstance b, boolean matchHierarchyMembers) {
 		if (a == null) throw new NullPointerException("null method A");
 		if (b == null) throw new NullPointerException("null method B");
-		if (a.getCls().getMatch() != b.getCls()) throw new IllegalArgumentException("the methods don't belong to the same class");
 		if (a.getMatch() == b) return;
 
 		System.out.println("match method "+a+" -> "+b+(a.hasMappedName() ? " ("+a.getName(NameType.MAPPED_PLAIN)+")" : ""));
@@ -279,7 +281,6 @@ public class Matcher {
 	public void match(FieldInstance a, FieldInstance b) {
 		if (a == null) throw new NullPointerException("null field A");
 		if (b == null) throw new NullPointerException("null field B");
-		if (a.getCls().getMatch() != b.getCls()) throw new IllegalArgumentException("the methods don't belong to the same class");
 		if (a.getMatch() == b) return;
 
 		System.out.println("match field "+a+" -> "+b+(a.hasMappedName() ? " ("+a.getName(NameType.MAPPED_PLAIN)+")" : ""));
@@ -397,8 +398,10 @@ public class Matcher {
 		boolean matchedClassesBefore = true;
 
 		do {
-			matchedAny = autoMatchMethods(level, absMethodAutoMatchThreshold, relMethodAutoMatchThreshold, progressReceiver);
-			matchedAny |= autoMatchFields(level, absFieldAutoMatchThreshold, relFieldAutoMatchThreshold, progressReceiver);
+			matchedAny = autoMatchMethods(level, true, absMethodAutoMatchThreshold, relMethodAutoMatchThreshold, progressReceiver);
+			matchedAny |= autoMatchFields(level, true,  absFieldAutoMatchThreshold, relFieldAutoMatchThreshold, progressReceiver);
+			matchedAny |= autoMatchMethods(level, false, absMethodAutoMatchThreshold, relMethodAutoMatchThreshold, progressReceiver);
+			matchedAny |= autoMatchFields(level, false,  absFieldAutoMatchThreshold, relFieldAutoMatchThreshold, progressReceiver);
 
 			if (!matchedAny && !matchedClassesBefore) {
 				break;
@@ -476,14 +479,14 @@ public class Matcher {
 		}
 	}
 
-	public boolean autoMatchMethods(DoubleConsumer progressReceiver) {
-		return autoMatchMethods(autoMatchLevel, absMethodAutoMatchThreshold, relMethodAutoMatchThreshold, progressReceiver);
+	public boolean autoMatchMethods(boolean isStatic, DoubleConsumer progressReceiver) {
+		return autoMatchMethods(autoMatchLevel, isStatic, absMethodAutoMatchThreshold, relMethodAutoMatchThreshold, progressReceiver);
 	}
 
-	public boolean autoMatchMethods(ClassifierLevel level, double absThreshold, double relThreshold, DoubleConsumer progressReceiver) {
+	public boolean autoMatchMethods(ClassifierLevel level, boolean isStatic, double absThreshold, double relThreshold, DoubleConsumer progressReceiver) {
 		AtomicInteger totalUnmatched = new AtomicInteger();
-		Map<MethodInstance, MethodInstance> matches = match(level, absThreshold, relThreshold,
-				cls -> cls.getMethods(), MethodClassifier::rank, MethodClassifier.getMaxScore(level),
+		Map<MethodInstance, MethodInstance> matches = match(level, isStatic, absThreshold, relThreshold,
+				ClassInstance::getMethods, MethodClassifier::rank, MethodClassifier.getMaxScore(level),
 				progressReceiver, totalUnmatched);
 
 		for (Map.Entry<MethodInstance, MethodInstance> entry : matches.entrySet()) {
@@ -495,16 +498,16 @@ public class Matcher {
 		return !matches.isEmpty();
 	}
 
-	public boolean autoMatchFields(DoubleConsumer progressReceiver) {
-		return autoMatchFields(autoMatchLevel, absFieldAutoMatchThreshold, relFieldAutoMatchThreshold, progressReceiver);
+	public boolean autoMatchFields(boolean isStatic, DoubleConsumer progressReceiver) {
+		return autoMatchFields(autoMatchLevel, isStatic, absFieldAutoMatchThreshold, relFieldAutoMatchThreshold, progressReceiver);
 	}
 
-	public boolean autoMatchFields(ClassifierLevel level, double absThreshold, double relThreshold, DoubleConsumer progressReceiver) {
+	public boolean autoMatchFields(ClassifierLevel level, boolean isStatic, double absThreshold, double relThreshold, DoubleConsumer progressReceiver) {
 		AtomicInteger totalUnmatched = new AtomicInteger();
 		double maxScore = FieldClassifier.getMaxScore(level);
 
-		Map<FieldInstance, FieldInstance> matches = match(level, absThreshold, relThreshold,
-				cls -> cls.getFields(), FieldClassifier::rank, maxScore,
+		Map<FieldInstance, FieldInstance> matches = match(level, isStatic, absThreshold, relThreshold,
+				ClassInstance::getFields, FieldClassifier::rank, maxScore,
 				progressReceiver, totalUnmatched);
 
 		for (Map.Entry<FieldInstance, FieldInstance> entry : matches.entrySet()) {
@@ -516,36 +519,44 @@ public class Matcher {
 		return !matches.isEmpty();
 	}
 
-	private <T extends MemberInstance<T>> Map<T, T> match(ClassifierLevel level, double absThreshold, double relThreshold,
+	private <T extends MemberInstance<T>> Map<T, T> match(ClassifierLevel level, boolean isStatic, double absThreshold, double relThreshold,
                                                           Function<ClassInstance, T[]> memberGetter, IRanker<T> ranker, double maxScore,
                                                           DoubleConsumer progressReceiver, AtomicInteger totalUnmatched) {
-		List<ClassInstance> classes = env.getClassesA().stream()
-				.filter(cls -> cls.getUri() != null && cls.getMatch() != null && memberGetter.apply(cls).length > 0)
-				.filter(cls -> {
-					for (T member : memberGetter.apply(cls)) {
-						if (member.getMatch() == null) return true;
-					}
-
-					return false;
-				})
-				.collect(Collectors.toList());
-		if (classes.isEmpty()) return Collections.emptyMap();
+		List<ClassInstance> classesA = new ArrayList<>(env.getClassesA());
+		List<ClassInstance> classesB = new ArrayList<>(env.getClassesB());
 
 		double maxMismatch = maxScore - getRawScore(absThreshold * (1 - relThreshold), maxScore);
 		Map<T, T> ret = new ConcurrentHashMap<>(512);
 
-		runInParallel(classes, cls -> {
+		runInParallel(classesA, cls -> {
 			int unmatched = 0;
 
-			for (T member : memberGetter.apply(cls)) {
-				if (member.getMatch() != null) continue;
+			if(cls.getMatch() == null) return;
 
-				List<RankResult<T>> ranking = ranker.rank(member, memberGetter.apply(cls.getMatch()), level, env, maxMismatch);
+			ArrayList<T> srcs = new ArrayList<>();
+			ArrayList<T> dsts = new ArrayList<>();
+
+			if(!isStatic) {
+				srcs.addAll(Arrays.stream(memberGetter.apply(cls)).filter(m -> m.getMatch() == null && !m.isStatic).collect(Collectors.toList()));
+				dsts.addAll(Arrays.stream(memberGetter.apply(cls.getMatch())).filter(m -> m.getMatch() == null && !m.isStatic).collect(Collectors.toList()));
+			} else {
+				srcs.addAll(Arrays.stream(memberGetter.apply(cls)).filter(m -> m.getMatch() == null && m.isStatic).collect(Collectors.toList()));
+				for(ClassInstance clsB : classesB) {
+					dsts.addAll(Arrays.stream(memberGetter.apply(clsB)).filter(m -> m.getMatch() == null && m.isStatic).collect(Collectors.toList()));
+				}
+			}
+
+			if(dsts.isEmpty()) return;
+
+			for (T src : srcs) {
+				if (src.getMatch() != null) continue;
+
+				List<RankResult<T>> ranking = ranker.rank(src, toArray(dsts), level, env, maxMismatch);
 
 				if (checkRank(ranking, absThreshold, relThreshold, maxScore)) {
 					T match = ranking.get(0).getSubject();
 
-					ret.put(member, match);
+					ret.put(src, match);
 				} else {
 					unmatched++;
 				}
@@ -848,4 +859,22 @@ public class Matcher {
 	private final double relMethodArgAutoMatchThreshold = 0.05;
 	private final double absMethodVarAutoMatchThreshold = 0.5;
 	private final double relMethodVarAutoMatchThreshold = 0.05;
+
+	public static <T> T[] toArray(Collection<T> c, T[] a) {
+		//noinspection unchecked
+		return c.size()>a.length ?
+				c.toArray((T[]) Array.newInstance(a.getClass().getComponentType(), c.size())) :
+				c.toArray(a);
+	}
+
+	/** The collection CAN be empty */
+	public static <T> T[] toArray(Collection<T> c, Class klass) {
+		//noinspection unchecked
+		return toArray(c, (T[]) Array.newInstance(klass, c.size()));
+	}
+
+	/** The collection CANNOT be empty! */
+	public static <T> T[] toArray(Collection<T> c) {
+		return toArray(c, c.iterator().next().getClass());
+	}
 }
