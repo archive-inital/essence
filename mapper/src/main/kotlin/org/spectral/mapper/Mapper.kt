@@ -19,6 +19,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.DoubleConsumer
 import kotlin.math.sqrt
+import Analysis as Analysis1
 
 /**
  * The Spectral Client Mapper Main object
@@ -61,6 +62,18 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         Matcher.init()
         val matcher = Matcher(OldClassEnvironment())
         matcher.init(config, progressConsumer)
+
+
+        val clientClassa = matcher.env.envA.getClsByName("client")
+        val initMethoda = clientClassa.getMethod("init", "()V")
+
+        Analysis.analyzeMethod(initMethoda, Analysis.CommonClasses(matcher.env.envA))
+
+        val clientClassb = matcher.env.envB.getClsByName("client")
+        val initMethodb = clientClassb.getMethod("init", "()V")
+
+        Analysis.analyzeMethod(initMethodb, Analysis.CommonClasses(matcher.env.envB))
+
         matcher.autoMatchAll(progressConsumer)
 
         /*

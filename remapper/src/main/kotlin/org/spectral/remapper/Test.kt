@@ -11,7 +11,6 @@ import java.awt.GridLayout
 import java.io.File
 import java.net.URL
 import java.net.URLClassLoader
-import java.util.jar.JarFile
 import javax.swing.JFrame
 
 object Test {
@@ -19,18 +18,17 @@ object Test {
     @JvmStatic
     fun main(args: Array<String>) {
 
-        val input = File("gamepack-deob-191.jar")
+        val input = File("gamepack-clean-191.jar")
         val mappings = MappingsReader().readFrom(File("build/gen/mappings/"))
         val output = File("gamepack-remapped-191.jar")
         val origNames = File("build/gen/orig_names.json")
 
-        val remapper = JarRemapper.Builder()
-            .input(input)
-            .output(output)
-            .mappings(mappings)
-            .build()
-
-        remapper.run()
+        val remapper = JarRemapper.run {
+            inputJar { input }
+            outputJar { output }
+            deobNamesFile { origNames }
+            withMappings { mappings }
+        }
 
         TestClient(File("gamepack-remapped-191.jar")).start()
     }
@@ -43,7 +41,7 @@ object Test {
             val params = this.crawlJavConfig()
             val classloader = URLClassLoader(arrayOf(gamepack.toURI().toURL()))
             val main = params["initial_class"]!!.replace(".class", "")
-            val applet = classloader.loadClass(main).newInstance() as Applet
+            val applet = Class.forName(main, true, classloader).newInstance() as Applet
 
             applet.background = Color.BLACK
             applet.preferredSize = Dimension(params["applet_minwidth"]!!.toInt(), params["applet_minheight"]!!.toInt())
@@ -56,6 +54,7 @@ object Test {
                 override fun appletResize(width: Int, height: Int) {
                     applet.size = Dimension(width, height)
                 }
+
                 override fun getAppletContext(): AppletContext? = null
                 override fun getParameter(name: String): String? = params[name]
             })

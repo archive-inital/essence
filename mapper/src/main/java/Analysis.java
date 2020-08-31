@@ -12,8 +12,8 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.*;
 
-class Analysis {
-	static void analyzeMethod(MethodInstance method, CommonClasses common) {
+public class Analysis {
+	public static void analyzeMethod(MethodInstance method, CommonClasses common) {
 		MethodNode asmNode = method.getAsmNode();
 		if (asmNode == null || (asmNode.access & Opcodes.ACC_ABSTRACT) != 0 || asmNode.instructions.size() == 0) return;
 
@@ -1249,7 +1249,7 @@ class Analysis {
 	}
 
 	public static class CommonClasses {
-		CommonClasses(ClassEnv env) {
+		public CommonClasses(ClassEnv env) {
 			this.INT = env.getCreateClassInstance("I");
 			this.LONG = env.getCreateClassInstance("J");
 			this.BOOLEAN = env.getCreateClassInstance("Z");

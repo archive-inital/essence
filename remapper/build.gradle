@@ -1,5 +1,11 @@
 description = "Jar File Remapper"
 
+apply plugin: 'java'
+
+repositories {
+    maven { url "https://jitpack.io" }
+}
+
 dependencies {
     implementation project(":mapping")
     implementation "org.ow2.asm:asm:$asm"

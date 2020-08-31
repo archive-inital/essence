@@ -3,276 +3,117 @@ package org.spectral.remapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.ClassWriter
-import org.objectweb.asm.Opcodes.ACC_STATIC
-import org.objectweb.asm.Type
-import org.objectweb.asm.commons.ClassRemapper
-import org.objectweb.asm.commons.Remapper
-import org.objectweb.asm.tree.*
 import org.spectral.mapping.Mappings
 import org.spectral.remapper.asm.ClassGroup
 import org.tinylog.kotlin.Logger
 import java.io.File
-import java.io.FileOutputStream
-import java.util.*
-import java.util.jar.JarEntry
-import java.util.jar.JarFile
-import java.util.jar.JarOutputStream
-import kotlin.system.exitProcess
 
-/**
- * Responsible for remaping a JAR file using given loaded
- * [Mappings] object.
- */
 class JarRemapper private constructor(
-    private val inputJarFile: File,
-    private val outputJarFile: File,
+    val inputJarFile: File,
+    val outputJarFile: File,
+    val deobNamesFile: File,
     val mappings: Mappings
-) {
+){
+
+    private lateinit var group: ClassGroup
+
+    private lateinit var deobNameMap: HashMap<String, String>
 
     /**
-     * The [JarRemapper] builder class.
-     */
-    class Builder {
-        private var inputJarFile: File? = null
-        private var outputJarFile: File? = null
-        private var mappings: Mappings? = null
-
-        fun input(file: File) = this.apply { this.inputJarFile = file }
-        fun output(file: File) = this.apply { this.outputJarFile = file }
-        fun mappings(mappings: Mappings) = this.apply { this.mappings = mappings }
-
-        /**
-         * Builds the [JarRemapper] instance.
-         *
-         * @return JarRemapper
-         */
-        fun build(): JarRemapper {
-            if(inputJarFile == null || outputJarFile == null || mappings == null) {
-                Logger.error("All options have not been specified.")
-                exitProcess(-1)
-            }
-
-            return JarRemapper(inputJarFile!!, outputJarFile!!, mappings!!)
-        }
-    }
-
-    /**
-     * Remaps the input JAR file entry names from the obfuscated names
-     * to the remapped names given some loaded mappings model.
+     * Runs the JAR Remapper
      */
     fun run() {
-        Logger.info("Remapping jar file: '${inputJarFile.path}'")
+        Logger.info("Loading classes from input JAR: '${inputJarFile.path}'.")
 
-        val group = ClassGroup.fromJar(inputJarFile)
+        group = ClassGroup.fromJar(inputJarFile)
 
-        val hierarchyGraph = HierarchyGraph()
+        Logger.info("Successfully loaded ${group.size} classes.")
 
-        /*
-         * Build the hierarchy graph
-         */
-        group.forEach { it.accept(hierarchyGraph) }
+        Logger.info("Loading deob names from JSON file: '${deobNamesFile.path}'.")
 
-        val asmMappings = AsmMappings(group, mappings, hierarchyGraph)
-        asmMappings.init()
+        val jsonMapper = jacksonObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
+        deobNameMap = jsonMapper.readValue(deobNamesFile)
 
-        /*
-         * Build the ASM mappings remapper
-         */
-        val remapper = AsmRemapper(asmMappings, hierarchyGraph)
+        Logger.info("Found ${deobNameMap.size} original deobfuscated name mappings.")
+
+        val remapper = AsmRemapper(group, deobNameMap, mappings)
 
         /*
-         * Remap each class in the class group
+         * Propagate the names
          */
-        val remappedClassBytes = hashMapOf<String, ByteArray>()
-        val jos = JarOutputStream(FileOutputStream(outputJarFile))
-        JarFile(inputJarFile).use { jar ->
-            jar.entries().asSequence()
-                .forEach { entry ->
-                    var name = entry.name
-                    val inputStream = jar.getInputStream(entry)
-                    var data = inputStream.readBytes()
+        remapper.propagateNames()
 
-                    if(name.endsWith(".DSA") || name.endsWith(".RSA") || name.endsWith(".EC") || name.endsWith(".SF")) {
-                        return@forEach
-                    }
+        /*
+         * Apply the updated namings and remap
+         */
+        remapper.remap()
 
-                    if(name.endsWith(".class")) {
-                        val className = name.substring(0, name.length - 6)
-                        data = remapClass(className, data, asmMappings, remapper)
-                        name = remapClassName(className, remapper) + ".class"
-                    }
+        /*
+         * Export the remapped class group to a jar file.
+         */
+        Logger.info("Exporting remapped classes to JAR file '${outputJarFile.path}'.")
 
-                    remappedClassBytes[name] = data
-                }
-        }
+        group.toJar(outputJarFile)
 
-        remappedClassBytes.forEach { (fileName, bytes) ->
-            jos.putNextEntry(JarEntry(fileName))
-            jos.write(bytes)
-            jos.closeEntry()
-        }
-
-        jos.close()
-
-        Logger.info("Successfully remapped classes.")
-    }
-
-    private fun remapClassName(name: String, remapper: AsmRemapper): String {
-        return remapper.map(name)
+        Logger.info("Jar remapping completed successfully.")
     }
 
     /**
-     * Remaps a class using the [remapper] data.
+     * Jar Remapper builder DSL
      *
-     * @param cls ClassNode
-     * @param remapper AsmRemapper
-     * @return ClassNode
+     * @property inputJarFile File?
+     * @property outputJarFile File?
+     * @property deobNamesFile File?
+     * @property mappings Mappings?
      */
-    private fun remapClass(name: String, data: ByteArray, mappings: AsmMappings, remapper: AsmRemapper): ByteArray {
-        val cls = ClassNode()
-        var reader = ClassReader(data)
-        reader.accept(cls, 0)
+    class JarRemapperBuilder {
+        private var inputJarFile: File? = null
+        private var outputJarFile: File? = null
+        private var deobNamesFile: File? = null
+        private var mappings: Mappings? = null
 
-        /*
-         * Rename inner class innerNames
-         */
-        if(cls.innerClasses != null) cls.innerClasses.forEach { innerClass ->
-            if(innerClass.innerName != null) {
-                val newName = mappings.mapClass(innerClass.name)
-                innerClass.name = newName.substring(newName.indexOf('$') + 1)
-            }
+        fun build(): JarRemapper {
+            val jarRemapper = JarRemapper(
+                inputJarFile!!,
+                outputJarFile!!,
+                deobNamesFile!!,
+                mappings!!
+            )
+
+            return jarRemapper
         }
 
-        /*
-         * Rename local variables and add method arguments.
-         */
-        cls.methods.forEach { method ->
-            val isStatic = (method.access and ACC_STATIC) != 0
-            val argCount = Type.getArgumentTypes(method.desc).size
-
-            /*
-             * Add arguments with names
-             */
-            if(method.parameters == null || method.parameters.size < argCount) {
-                method.parameters = mutableListOf()
-                for(i in 0 until argCount) {
-                    method.parameters.add(ParameterNode("arg${i + 1}", 0))
-                }
-            }
-
-            /*
-             * Remove empty local variable tables
-             */
-            if(method.localVariables != null && method.localVariables.size < method.lvTSize) {
-                if(method.localVariables.size != 0) {
-                    Logger.warn("WARNING: Removed non-empty LVT (size ${method.localVariables.size})")
-                }
-
-                method.localVariables = null
-            }
-
-            var index = 0
-            val localNames = hashMapOf<Int, String>()
-            var varSuffix = 0
-
-            if(method.localVariables != null) method.localVariables.forEach { local ->
-                /*
-                 * Name the local variable.
-                 */
-                if(!isStatic && index == 0) {
-                    local.name = "this"
-                } else if(index < method.lvTSize) {
-                    local.name = method.parameters[if(isStatic) index else index - 1].name
-                } else {
-                    local.name = mappings.getLocal(name, method.name, method.desc, index)
-
-                    /*
-                     * No mapping exists for this local variable. Use the previous local with the name
-                     * index or generate a new unique name.
-                     */
-
-                    val localHash = Objects.hash(local.index, local.desc, local.signature)
-                    if(local.name == null) {
-                        val localName = localNames[localHash]
-                        if(localName != null) {
-                            local.name = localName
-                        } else {
-                            local.name = "rar${++varSuffix}"
-                            localNames[localHash] = local.name
-                        }
-                    } else {
-                        localNames[localHash] = local.name
-                    }
-                }
-
-                /*
-                 * Fix broken local start and end labels.
-                 */
-                if(local.start == local.end) {
-                    local.start = method.instructions.first as LabelNode
-                    local.end = method.instructions.first as LabelNode
-                }
-
-                index++
-            } else {
-                /*
-                 * Generate local variable table based on arguments. No LVT but not argument
-                 * list breaks fernflower.
-                 */
-                method.localVariables = mutableListOf()
-
-                /*
-                 * Get the label node at the start of the method, or add it if it's missing
-                 */
-                if(method.instructions.first !is LabelNode) {
-                    method.instructions.insert(LabelNode())
-                }
-
-                val firstLabel = method.instructions.first as LabelNode
-
-                /*
-                 * Add the implicit this argument
-                 */
-                if(!isStatic) {
-                    method.localVariables.add(LocalVariableNode("this", "L" + cls.name + ";", null, firstLabel, firstLabel, 0))
-                }
-
-                /*
-                 * Add arguments to the local variable table
-                 */
-                val argTypes = Type.getArgumentTypes(method.desc)
-                var i = 0
-
-                method.parameters.forEach { param ->
-                    method.localVariables.add(LocalVariableNode(param.name, argTypes[i].descriptor, null, firstLabel, firstLabel, if(isStatic) i else i + 1))
-                    i++
-                }
-            }
+        fun inputJar(file: () -> File): JarRemapperBuilder {
+            inputJarFile = file()
+            return this
         }
 
-        var writer = ClassWriter(0)
-        cls.accept(writer)
+        fun outputJar(file: () -> File): JarRemapperBuilder {
+            outputJarFile = file()
+            return this
+        }
 
-        val newData = writer.toByteArray()
+        fun deobNamesFile(file: () -> File): JarRemapperBuilder {
+            deobNamesFile = file()
+            return this
+        }
 
-        reader = ClassReader(newData)
-        reader.accept(cls, 0)
-
-        val node = ClassNode()
-        val classRemapper = ClassRemapper(node, remapper)
-        reader.accept(classRemapper, 0)
-
-        writer = ClassWriter(0)
-        node.accept(writer)
-
-        return writer.toByteArray()
+        fun withMappings(mappings: () -> Mappings): JarRemapperBuilder {
+            this.mappings = mappings()
+            return this
+        }
     }
 
-    private val MethodNode.lvTSize: Int get() {
-        val isStatic = (this.access and ACC_STATIC) != 0
-        val argCount = Type.getArgumentTypes(this.desc).size
-        return if(isStatic) argCount else argCount + 1
+    companion object {
+
+        fun run(init: JarRemapperBuilder.() -> Unit): JarRemapper {
+            val jarRemapper = JarRemapperBuilder()
+            jarRemapper.init()
+
+            val inst = jarRemapper.build()
+            inst.run()
+
+            return inst
+        }
     }
 }

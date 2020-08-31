@@ -838,14 +838,14 @@ public class Matcher {
 
 	private final OldClassEnvironment env;
 	private final ClassifierLevel autoMatchLevel = ClassifierLevel.Extra;
-	private final double absClassAutoMatchThreshold = 0.25;
-	private final double relClassAutoMatchThreshold = 0.025;
-	private final double absMethodAutoMatchThreshold = 0.25;
-	private final double relMethodAutoMatchThreshold = 0.025;
-	private final double absFieldAutoMatchThreshold = 0.25;
-	private final double relFieldAutoMatchThreshold = 0.025;
-	private final double absMethodArgAutoMatchThreshold = 0.25;
-	private final double relMethodArgAutoMatchThreshold = 0.025;
-	private final double absMethodVarAutoMatchThreshold = 0.25;
-	private final double relMethodVarAutoMatchThreshold = 0.025;
+	private final double absClassAutoMatchThreshold = 0.5;
+	private final double relClassAutoMatchThreshold = 0.05;
+	private final double absMethodAutoMatchThreshold = 0.5;
+	private final double relMethodAutoMatchThreshold = 0.05;
+	private final double absFieldAutoMatchThreshold = 0.5;
+	private final double relFieldAutoMatchThreshold = 0.05;
+	private final double absMethodArgAutoMatchThreshold = 0.5;
+	private final double relMethodArgAutoMatchThreshold = 0.05;
+	private final double absMethodVarAutoMatchThreshold = 0.5;
+	private final double relMethodVarAutoMatchThreshold = 0.05;
 }
