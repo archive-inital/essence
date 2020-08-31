@@ -19,7 +19,7 @@ object Test {
     @JvmStatic
     fun main(args: Array<String>) {
 
-        val input = File("gamepack-clean-191.jar")
+        val input = File("gamepack-deob-191.jar")
         val mappings = MappingsReader().readFrom(File("build/gen/mappings/"))
         val output = File("gamepack-remapped-191.jar")
         val origNames = File("build/gen/orig_names.json")
@@ -28,7 +28,6 @@ object Test {
             .input(input)
             .output(output)
             .mappings(mappings)
-            .origNames(origNames)
             .build()
 
         remapper.run()

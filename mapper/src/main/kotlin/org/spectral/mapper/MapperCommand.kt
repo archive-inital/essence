@@ -55,9 +55,9 @@ class MapperCommand : CliktCommand(
         /*
          * Create the class environment from both JAR files.
          */
-        val env = ClassEnvironment.init(jarFileA, jarFileB)
+        //val env = ClassEnvironment.init(jarFileA, jarFileB)
 
-        Logger.info("Running mapper...")
+        //Logger.info("Running mapper...")
 
         /*
          * Build progress bar.
@@ -65,21 +65,21 @@ class MapperCommand : CliktCommand(
         val progress = ProgressBarBuilder()
             .setTaskName("Mapping")
             .setUpdateIntervalMillis(250)
-            .setUnit(" checks", 1L)
+            .setInitialMax(100L)
             .setStyle(ProgressBarStyle.ASCII)
             .build()
 
         /*
          * Create mapper instance.
          */
-        val mapper = Mapper(env, progress)
-        mapper.run()
+        val mapper = Mapper(ClassEnvironment(), progress)
+        val matcher = mapper.runOld(jarFileA, jarFileB)
 
         /*
          * If the export directory is specified, build the mappings.
          */
         if(exportMappingsDir != null) {
-            val mappings = MappingBuilder.buildMappings(mapper.env.groupA.toCollection())
+            val mappings = MappingBuilder.buildOldMappings(matcher.env.envA.classes)
 
             /*
              * If the opaques file was specified, load the opaque predicate values.

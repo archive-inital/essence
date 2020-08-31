@@ -1,5 +1,8 @@
 package org.spectral.mapper
 
+import Matcher
+import OldClassEnvironment
+import ProjectConfig
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.collect
@@ -9,9 +12,12 @@ import org.spectral.mapper.classifier.*
 import org.spectral.mapper.asm.*
 import org.spectral.mapper.util.CompareUtil
 import org.tinylog.kotlin.Logger
+import java.io.File
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.DoubleConsumer
 import kotlin.math.sqrt
 
 /**
@@ -30,6 +36,49 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         MethodClassifier.init()
         FieldClassifier.init()
         VariableClassifier.init()
+    }
+
+    /**
+     * Runs the mapper using the older working java source
+     * from version 1.0 of the mapper.
+     */
+    fun runOld(jarFileA: File, jarFileB: File): Matcher {
+        val config = ProjectConfig(
+            mutableListOf(jarFileA.toPath()),
+            mutableListOf(jarFileB.toPath()),
+            mutableListOf<Path>(),
+            mutableListOf<Path>(),
+            mutableListOf<Path>(),
+            false,
+            "",
+            "",
+            "",
+            ""
+        )
+
+        val progressConsumer = DoubleConsumer { progress?.stepTo((it * 100.0).toLong()) }
+
+        Matcher.init()
+        val matcher = Matcher(OldClassEnvironment())
+        matcher.init(config, progressConsumer)
+        matcher.autoMatchAll(progressConsumer)
+
+        /*
+         * Print matching statistics.
+         */
+
+        val stats = matcher.getStatus(true)
+
+        println("==============================================")
+        println("Classes: ${stats.matchedClassCount} / ${stats.totalClassCount} (${(stats.matchedClassCount.toDouble() / stats.totalClassCount.toDouble()) * 100.0}%)")
+        println("Methods: ${stats.matchedMethodCount} / ${stats.totalMethodCount} (${(stats.matchedMethodCount.toDouble() / stats.totalMethodCount.toDouble()) * 100.0}%)")
+        println("Fields: ${stats.matchedFieldCount} / ${stats.totalFieldCount} (${(stats.matchedFieldCount.toDouble() / stats.totalFieldCount.toDouble()) * 100.0}%)")
+        println("Arguments: ${stats.matchedMethodArgCount} / ${stats.totalMethodArgCount} (${(stats.matchedMethodArgCount.toDouble() / stats.totalMethodArgCount.toDouble()) * 100.0}%)")
+        println("==============================================")
+
+        progress?.close()
+
+        return matcher
     }
 
     /**

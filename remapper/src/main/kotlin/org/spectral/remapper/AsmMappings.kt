@@ -12,7 +12,6 @@ import org.tinylog.kotlin.Logger
 class AsmMappings(
     private val group: ClassGroup,
     private val mappings: Mappings,
-    private val origNameMappings: HashMap<String, String>,
     private val hierarchyGraph: HierarchyGraph
 ) {
 
@@ -109,7 +108,7 @@ class AsmMappings(
             if(!isNameObfuscated(name)) {
                 result = name
             } else {
-                result = origNameMappings[name]!!
+                result = name
                 addClass(name, result)
             }
         }
@@ -136,18 +135,11 @@ class AsmMappings(
 
         var result = getMethod(owner, name, desc)
         if(result == null) {
-            if (!isNameObfuscated(name)) {
+            if (!isNameObfuscated(owner)) {
                 result = name
             } else {
-                val override = overrides(owner, name, desc, implementations.keys, group.associateBy { it.name })
-                if(override != null) {
-                    val o = override.split(" ")
-                    result = origNameMappings[override]!!
-                    addMethod(owner, name, desc, result)
-                } else {
-                    result = origNameMappings["$owner.$name$desc"] ?: name
-                    addMethod(owner, name, desc, result)
-                }
+                result = name
+                addMethod(owner, name, desc, result)
             }
         }
 
@@ -166,7 +158,7 @@ class AsmMappings(
             if(!isNameObfuscated(name)) {
                 result = name
             } else {
-                result = origNameMappings["$owner.$name$desc"] ?: name
+                result = name
                 addField(owner, name, desc, result)
             }
         }

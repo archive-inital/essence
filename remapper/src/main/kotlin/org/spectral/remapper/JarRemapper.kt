@@ -28,7 +28,6 @@ import kotlin.system.exitProcess
 class JarRemapper private constructor(
     private val inputJarFile: File,
     private val outputJarFile: File,
-    private val origNamesFile: File,
     val mappings: Mappings
 ) {
 
@@ -39,12 +38,10 @@ class JarRemapper private constructor(
         private var inputJarFile: File? = null
         private var outputJarFile: File? = null
         private var mappings: Mappings? = null
-        private var origNamesFile: File? = null
 
         fun input(file: File) = this.apply { this.inputJarFile = file }
         fun output(file: File) = this.apply { this.outputJarFile = file }
         fun mappings(mappings: Mappings) = this.apply { this.mappings = mappings }
-        fun origNames(file: File) = this.apply { this.origNamesFile = file }
 
         /**
          * Builds the [JarRemapper] instance.
@@ -52,12 +49,12 @@ class JarRemapper private constructor(
          * @return JarRemapper
          */
         fun build(): JarRemapper {
-            if(inputJarFile == null || outputJarFile == null || mappings == null || origNamesFile == null) {
+            if(inputJarFile == null || outputJarFile == null || mappings == null) {
                 Logger.error("All options have not been specified.")
                 exitProcess(-1)
             }
 
-            return JarRemapper(inputJarFile!!, outputJarFile!!, origNamesFile!!, mappings!!)
+            return JarRemapper(inputJarFile!!, outputJarFile!!, mappings!!)
         }
     }
 
@@ -77,13 +74,7 @@ class JarRemapper private constructor(
          */
         group.forEach { it.accept(hierarchyGraph) }
 
-        /*
-         * Build the original name mappings hash map.
-         */
-        val jsonMapper = jacksonObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
-        val origNameMappings = jsonMapper.readValue<HashMap<String, String>>(origNamesFile)
-
-        val asmMappings = AsmMappings(group, mappings, origNameMappings, hierarchyGraph)
+        val asmMappings = AsmMappings(group, mappings, hierarchyGraph)
         asmMappings.init()
 
         /*

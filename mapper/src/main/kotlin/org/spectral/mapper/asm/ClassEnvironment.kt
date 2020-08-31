@@ -8,7 +8,7 @@ import java.io.File
  *
  * This object is only used for mapping and deobfuscation within the spectral client.
  */
-class ClassEnvironment private constructor() {
+class ClassEnvironment() {
 
     val groupA = ClassGroup(this)
 
