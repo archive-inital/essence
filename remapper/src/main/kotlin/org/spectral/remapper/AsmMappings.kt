@@ -1,9 +1,20 @@
 package org.spectral.remapper
 
+import com.google.common.collect.MultimapBuilder
+import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.MethodNode
 import org.spectral.mapping.Mappings
+import org.spectral.remapper.asm.ClassGroup
+import org.spectral.remapper.asm.owner
+import org.spectral.remapper.asm.resolveMethod
 import org.tinylog.kotlin.Logger
 
-class AsmMappings(private val mappings: Mappings, private val hierarchyGraph: HierarchyGraph) {
+class AsmMappings(
+    private val group: ClassGroup,
+    private val mappings: Mappings,
+    private val origNameMappings: HashMap<String, String>,
+    private val hierarchyGraph: HierarchyGraph
+) {
 
     private val classes = LinkedHashMap<String, String>()
     private val methods = LinkedHashMap<String, String>()
@@ -14,6 +25,9 @@ class AsmMappings(private val mappings: Mappings, private val hierarchyGraph: Hi
     private var classIndex = 0
     private var methodIndex = 0
     private var fieldIndex = 0
+
+    private val implementationsMulti = MultimapBuilder.hashKeys().arrayListValues().build<String, ClassMethod>()
+    private val implementations = implementationsMulti.asMap()
 
     fun init() {
         Logger.info("Initializing asm mappings...")
@@ -31,6 +45,29 @@ class AsmMappings(private val mappings: Mappings, private val hierarchyGraph: Hi
 
             c.fields.forEach { f ->
                 addField(f.obfOwner, f.obfName, f.obfDesc, f.name)
+            }
+        }
+
+        /*
+         * Build the method override implementations map
+         */
+
+        val classNames = group.associateBy { it.name }
+        val topMethods = hashSetOf<String>()
+
+        group.forEach { c ->
+            val supers = supers(c, classNames)
+            c.methods.forEach { m ->
+                if(supers.none { it.methods.any { it.name == m.name && it.desc == m.desc } }) {
+                    topMethods.add("${c.name}.${m.name}${m.desc}")
+                }
+            }
+        }
+
+        group.forEach { c ->
+            c.methods.forEach { m ->
+                val s = overrides(c.name, m.name, m.desc, topMethods, classNames)
+                implementationsMulti.put(s, ClassMethod(c, m))
             }
         }
     }
@@ -72,7 +109,7 @@ class AsmMappings(private val mappings: Mappings, private val hierarchyGraph: Hi
             if(!isNameObfuscated(name)) {
                 result = name
             } else {
-                result = "class${++classIndex}"
+                result = origNameMappings[name]!!
                 addClass(name, result)
             }
         }
@@ -99,8 +136,19 @@ class AsmMappings(private val mappings: Mappings, private val hierarchyGraph: Hi
 
         var result = getMethod(owner, name, desc)
         if(result == null) {
-            result = "method${++methodIndex}"
-            addMethod(owner, name, desc, result)
+            if (!isNameObfuscated(name)) {
+                result = name
+            } else {
+                val override = overrides(owner, name, desc, implementations.keys, group.associateBy { it.name })
+                if(override != null) {
+                    val o = override.split(" ")
+                    result = origNameMappings[override]!!
+                    addMethod(owner, name, desc, result)
+                } else {
+                    result = origNameMappings["$owner.$name$desc"] ?: name
+                    addMethod(owner, name, desc, result)
+                }
+            }
         }
 
         return result
@@ -115,8 +163,12 @@ class AsmMappings(private val mappings: Mappings, private val hierarchyGraph: Hi
 
         var result = getField(owner, name, desc)
         if(result == null) {
-            result = "field${++fieldIndex}"
-            addField(owner, name, desc, result)
+            if(!isNameObfuscated(name)) {
+                result = name
+            } else {
+                result = origNameMappings["$owner.$name$desc"] ?: name
+                addField(owner, name, desc, result)
+            }
         }
 
         return result
@@ -144,5 +196,23 @@ class AsmMappings(private val mappings: Mappings, private val hierarchyGraph: Hi
 
     private fun isNameObfuscated(name: String): Boolean {
         return (name.length <= 2 || (name.length == 3 && name.startsWith("aa")))
+    }
+
+    private data class ClassMethod(val cls: ClassNode, val method: MethodNode)
+
+    private fun overrides(owner: String, name: String, desc: String, methods: Set<String>, classNames: Map<String, ClassNode>): String? {
+        val s = "$owner.$name$desc"
+        if(s in methods) return s
+        if(name.startsWith("<init>")) return null
+        val node = classNames[owner] ?: return null
+        for(sup in supers(node, classNames)) {
+            return overrides(sup.name, name, desc, methods, classNames) ?: continue
+        }
+
+        return null
+    }
+
+    private fun supers(node: ClassNode, classNames: Map<String, ClassNode>): Collection<ClassNode> {
+        return node.interfaces.plus(node.superName).mapNotNull { classNames[it] }.flatMap { supers(it, classNames).plus(it) }
     }
 }

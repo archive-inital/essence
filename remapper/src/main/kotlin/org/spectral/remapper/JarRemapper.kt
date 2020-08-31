@@ -1,5 +1,8 @@
 package org.spectral.remapper
 
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Opcodes.ACC_STATIC
@@ -8,6 +11,7 @@ import org.objectweb.asm.commons.ClassRemapper
 import org.objectweb.asm.commons.Remapper
 import org.objectweb.asm.tree.*
 import org.spectral.mapping.Mappings
+import org.spectral.remapper.asm.ClassGroup
 import org.tinylog.kotlin.Logger
 import java.io.File
 import java.io.FileOutputStream
@@ -24,6 +28,7 @@ import kotlin.system.exitProcess
 class JarRemapper private constructor(
     private val inputJarFile: File,
     private val outputJarFile: File,
+    private val origNamesFile: File,
     val mappings: Mappings
 ) {
 
@@ -34,10 +39,12 @@ class JarRemapper private constructor(
         private var inputJarFile: File? = null
         private var outputJarFile: File? = null
         private var mappings: Mappings? = null
+        private var origNamesFile: File? = null
 
         fun input(file: File) = this.apply { this.inputJarFile = file }
         fun output(file: File) = this.apply { this.outputJarFile = file }
         fun mappings(mappings: Mappings) = this.apply { this.mappings = mappings }
+        fun origNames(file: File) = this.apply { this.origNamesFile = file }
 
         /**
          * Builds the [JarRemapper] instance.
@@ -45,12 +52,12 @@ class JarRemapper private constructor(
          * @return JarRemapper
          */
         fun build(): JarRemapper {
-            if(inputJarFile == null || outputJarFile == null || mappings == null) {
+            if(inputJarFile == null || outputJarFile == null || mappings == null || origNamesFile == null) {
                 Logger.error("All options have not been specified.")
                 exitProcess(-1)
             }
 
-            return JarRemapper(inputJarFile!!, outputJarFile!!, mappings!!)
+            return JarRemapper(inputJarFile!!, outputJarFile!!, origNamesFile!!, mappings!!)
         }
     }
 
@@ -70,7 +77,13 @@ class JarRemapper private constructor(
          */
         group.forEach { it.accept(hierarchyGraph) }
 
-        val asmMappings = AsmMappings(mappings, hierarchyGraph)
+        /*
+         * Build the original name mappings hash map.
+         */
+        val jsonMapper = jacksonObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
+        val origNameMappings = jsonMapper.readValue<HashMap<String, String>>(origNamesFile)
+
+        val asmMappings = AsmMappings(group, mappings, origNameMappings, hierarchyGraph)
         asmMappings.init()
 
         /*
@@ -81,6 +94,7 @@ class JarRemapper private constructor(
         /*
          * Remap each class in the class group
          */
+        val remappedClassBytes = hashMapOf<String, ByteArray>()
         val jos = JarOutputStream(FileOutputStream(outputJarFile))
         JarFile(inputJarFile).use { jar ->
             jar.entries().asSequence()
@@ -99,11 +113,14 @@ class JarRemapper private constructor(
                         name = remapClassName(className, remapper) + ".class"
                     }
 
-                    val newEntry = JarEntry(name)
-                    jos.putNextEntry(newEntry)
-                    jos.write(data)
-                    jos.closeEntry()
+                    remappedClassBytes[name] = data
                 }
+        }
+
+        remappedClassBytes.forEach { (fileName, bytes) ->
+            jos.putNextEntry(JarEntry(fileName))
+            jos.write(bytes)
+            jos.closeEntry()
         }
 
         jos.close()

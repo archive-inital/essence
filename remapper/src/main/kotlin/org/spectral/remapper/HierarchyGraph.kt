@@ -12,10 +12,10 @@ import kotlin.math.pow
 
 class HierarchyGraph : ClassVisitor(ASM8) {
 
-    private val hierarchy = HashMultimap.create<String, String>()
-    private val superHierarchy = HashMultimap.create<String, String>()
-    private val methodHierarchy = HashMultimap.create<String, MemberRef>()
-    private val fieldHierarchy = HashMultimap.create<String, MemberRef>()
+    private val hierarchy = hashMapOf<String, HashSet<String>>()
+    private val superHierarchy = hashMapOf<String, HashSet<String>>()
+    private val methodHierarchy = hashMapOf<String, HashSet<MemberRef>>()
+    private val fieldHierarchy = hashMapOf<String, HashSet<MemberRef>>()
 
     private lateinit var className: String
 
@@ -42,13 +42,13 @@ class HierarchyGraph : ClassVisitor(ASM8) {
     ) {
         super.visit(version, access, name, signature, superName, interfaces)
 
-        hierarchy.put(name, null)
-        methodHierarchy.put(name, null)
-        fieldHierarchy.put(name, null)
+        hierarchy[name] = hashSetOf()
+        methodHierarchy[name] = hashSetOf()
+        fieldHierarchy[name] = hashSetOf()
 
-        if(superName != null) hierarchy.put(name, superName)
-        hierarchy.putAll(name, interfaces!!.toHashSet())
-        if((access and ACC_ENUM) != 0) hierarchy.put(name, "java/lang/Enum")
+        if(superName != null) hierarchy[name]!!.add(superName)
+        hierarchy[name]!!.addAll(interfaces!!)
+        if((access and ACC_ENUM) != 0) hierarchy[name]!!.add("java/lang/Enum")
 
         className = name
     }
@@ -63,7 +63,7 @@ class HierarchyGraph : ClassVisitor(ASM8) {
         val mv = super.visitMethod(access, name, desc, signature, exceptions)
 
         if((access and (ACC_PUBLIC or ACC_PROTECTED)) != 0) {
-            methodHierarchy.put(className, MemberRef(name, desc))
+            methodHierarchy[className]!!.add(MemberRef(name, desc))
         }
 
         return mv
@@ -79,19 +79,19 @@ class HierarchyGraph : ClassVisitor(ASM8) {
         val fv = super.visitField(access, name, desc, signature, value)
 
         if((access and (ACC_PUBLIC or ACC_PROTECTED)) != 0) {
-            fieldHierarchy.put(className, MemberRef(name, desc))
+            fieldHierarchy[className]!!.add(MemberRef(name, desc))
         }
 
         return fv
     }
 
     private fun visitClasspathClass(name: String) {
-        hierarchy.put(name, null)
-        methodHierarchy.put(name, null)
-        fieldHierarchy.put(name, null)
+        hierarchy[name] = hashSetOf()
+        methodHierarchy[name] = hashSetOf()
+        fieldHierarchy[name] = hashSetOf()
 
         try {
-            val inputStream = HierarchyGraph::class.java.classLoader.getResourceAsStream(name + ".class") ?: return
+            val inputStream = HierarchyGraph::class.java.classLoader.getResourceAsStream("$name.class") ?: return
             val reader = ClassReader(inputStream)
             reader.accept(this, 0)
         } catch(e : IOException) {
@@ -100,18 +100,18 @@ class HierarchyGraph : ClassVisitor(ASM8) {
     }
 
     fun getSuperClasses(name: String): Set<String> {
-        var result = hierarchy.get(name)
+        var result = hierarchy[name]
 
         if(result == null) {
             visitClasspathClass(name)
-            result = hierarchy.get(name)
+            result = hierarchy[name]
         }
 
-        return result
+        return result!!
     }
 
     fun getAllSuperClasses(name: String): Set<String> {
-        val cacheResult = superHierarchy.get(name)
+        val cacheResult = superHierarchy[name]
         if(cacheResult != null) return cacheResult
 
         val superClasses = mutableSetOf<String>()
@@ -123,18 +123,18 @@ class HierarchyGraph : ClassVisitor(ASM8) {
             stack.addAll(getSuperClasses(currentClass))
         }
 
-        superHierarchy.putAll(name, superClasses)
+        superHierarchy[name] = superClasses.toHashSet()
         return superClasses
     }
 
     fun getHierarchyMethods(name: String): Set<MemberRef> {
-        var result = methodHierarchy.get(name)
+        var result = methodHierarchy[name]
         if(result == null) {
             visitClasspathClass(name)
             result = methodHierarchy.get(name)
         }
 
-        return result
+        return result!!
     }
 
     fun getHierarchyFields(name: String): Set<MemberRef> {
@@ -144,6 +144,6 @@ class HierarchyGraph : ClassVisitor(ASM8) {
             result = fieldHierarchy.get(name)
         }
 
-        return result
+        return result!!
     }
 }

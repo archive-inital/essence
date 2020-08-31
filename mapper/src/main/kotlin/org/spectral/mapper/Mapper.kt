@@ -612,8 +612,8 @@ class Mapper(val env: ClassEnvironment, private val progress: ProgressBar? = nul
         /**
          * Matching thresholds
          */
-        const val ABSOLUTE_MATCH_THRESHOLD = 0.01
-        const val RELATIVE_MATCH_THRESHOLD = 0.001
+        const val ABSOLUTE_MATCH_THRESHOLD = 0.25
+        const val RELATIVE_MATCH_THRESHOLD = 0.025
 
         fun calculateInverseScore(score: Double, max: Double): Double {
             return sqrt(score) * max
