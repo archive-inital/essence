@@ -110,6 +110,18 @@ class AsmRemapper(val group: ClassGroup, val deobNames: HashMap<String, String>,
                         }
                     }
                 }
+
+                /*
+                 * Update method arguments.
+                 */
+                m.localVariables?.forEach { lv ->
+                    var argName = mappings.mapArgument(c.name, m.name, m.desc, lv.index)
+                    if(argName == null) {
+                        argName = "arg${lv.index + 1}"
+                    }
+
+                    lv.name = argName
+                }
             }
         }
 
