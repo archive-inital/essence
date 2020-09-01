@@ -1,6 +1,11 @@
 description = "Jar File Remapper"
 
 apply plugin: 'java'
+apply plugin: 'maven-publish'
+
+def mavenUsername = hasProperty('mavenUsername') ? mavenUsername : System.getenv('MAVEN_USERNAME')
+def mavenPassword = hasProperty('mavenPassword') ? mavenPassword : System.getenv('MAVEN_PASSWORD')
+def mavenUrl = hasProperty('mavenUrl') ? mavenUrl : System.getenv('MAVEN_URL')
 
 repositories {
     maven { url "https://jitpack.io" }
@@ -14,4 +19,33 @@ dependencies {
     implementation "org.ow2.asm:asm-tree:$asm"
     implementation "com.fasterxml.jackson.core:jackson-databind:$databind"
     implementation "com.fasterxml.jackson.module:jackson-module-kotlin:$databind"
+}
+
+task sourceJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'org.spectral'
+            artifactId = 'remapper'
+            version = version
+
+            from components.java
+            artifact sourceJar
+        }
+    }
+
+    repositories {
+        maven {
+            credentials {
+                username = mavenUsername
+                password = mavenPassword
+            }
+
+            url = mavenUrl
+        }
+    }
 }

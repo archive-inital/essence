@@ -1,11 +1,29 @@
+buildscript {
+    repositories {
+        mavenLocal()
+    }
+
+    dependencies {
+        classpath 'org.spectral:essence:0.0.1-r1'
+    }
+}
+
 plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.3.72' apply false
 }
 
 apply from: 'version.gradle'
+apply plugin: 'org.spectral.essence'
 
 wrapper {
     gradleVersion = "6.3"
+}
+
+generateMappings {
+    inputFile = file('build/gen/gamepack-deob.jar')
+    referenceFile = file('refactored-client-191.jar')
+    exportDir = file('runescape-mappings/')
+    opaqueValuesFile = file('build/gen/opaque_values.json')
 }
 
 allprojects {
